@@ -1,0 +1,1128 @@
+---
+title: "Smoke Outlook for <br> `r params$BURN_NAME` Prescribed Fire"
+subtitle: "`r params$FOREST`"
+# date: "Issued at `r Sys.time()`"
+output:
+  html_document: 
+    toc: TRUE
+    toc_depth: 2
+    toc_float: TRUE
+    css: report_styles.css
+geometry: margin=0.25in
+params: 
+  BURN_NAME: "Hidden Valley"
+  FOREST: "George Washington and Jefferson National Forest"
+  AUTHOR: "Jeremy Ash"
+  EMAIL: "jeremy.ash@usda.gov"
+  PHONE: "828-244-4741"
+  RUN_ID: "167c62c71d91b9"
+  DROP_LOW_AVG: "No"
+  FORECAST_AQI_SELECT: "Good"
+  SUPERFOG_SCREEN_SELECT: "No"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+  library(tidyverse)            # tidyverse
+  library(ggrepel)              # label arrangement for ggplot
+  library(png)                  # reading in PNGs from BSky
+  library(curl)                 # downloading data from BSky dispersion results
+  library(RCurl)                 # downloading data from BSky dispersion results
+  library(rjson)                # reading JSON data
+  library(lubridate)            # date manipulation
+  library(terra)                # raster manipulation       
+  library(sf)                   # spatial data
+  library(kableExtra)           # styling of kable objects
+  library(leaflet)              # interactive mapping
+  library(egg)
+  library(rvest)                # html parsing
+  
+  # Mazama Science packages
+  library(beakr)                # web service framework
+  library(MazamaCoreUtils)      # cache management and more
+  library(AirMonitor)           # air quality data
+
+```
+
+
+```{r burn_info, include = FALSE}
+##***************************************
+## FIND MOST RECENT MODEL RUN AND CORRECT SERVER LINK 
+##***************************************
+
+# general dispersion results link
+bsky_link <- paste("https://tools.airfire.org/playground/v3.5/dispersionresults.php?scenario_id=",
+                   params$RUN_ID,
+                   sep = "")
+
+# links for results output from both servers
+serv1_link <- paste("https://playground-1.airfire.org/bluesky-web-output/",
+                      params$RUN_ID,
+                      "-dispersion",
+                      sep = "")
+
+serv2_link <- paste("https://playground-2.airfire.org/bluesky-web-output/",
+                    params$RUN_ID,
+                    "-dispersion",
+                    sep = "")
+
+serv_links_ls <- list(serv1_link, serv2_link)
+names(serv_links_ls) <- c("serv1_link", 
+                          "serv2_link")
+
+
+# get info on end time of simulation for each server
+date_info_1 <- if (url.exists(serv1_link)) {
+  
+  # pull end time from output.json
+  end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
+  
+  # create df
+  end_time_df <- tibble(server = "serv1_link",
+                        end_time = end_time_val)
+  
+}else{
+  # create df
+  end_time_df <- tibble(server = NA,
+                        end_time = NA)}
+
+
+
+date_info_2 <- if (url.exists(serv2_link)) {
+  
+  # pull end time from output.json
+  end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
+  
+  # create df
+  end_time_df <- tibble(server = "serv2_link",
+                        end_time = end_time_val)
+  
+}else{
+  # create df
+  end_time_df <- tibble(server = NA,
+                        end_time = NA)}
+
+# combine outputs, select most recent model and set results_link to correct url
+recent_server <- bind_rows(date_info_1, date_info_2) %>% 
+  arrange(desc(end_time)) %>% 
+  slice(1) %>% 
+  pull(server)
+
+results_output_link <- serv_links_ls[[recent_server]]
+
+
+## CREATE DATAFRAME OF BASIC FIRE INFO  ----------------------------------------------
+
+# basic burn information
+basic_burn_info <- read.csv(paste(results_output_link, "/output/data/fire_locations.csv", sep = "")) %>% 
+  dplyr::select(lat = latitude,
+         lon = longitude,
+         utc_offset,
+         date_time,
+         acres = area,
+         consumption_total) %>% 
+  mutate(date = as_date(ymd(date_time)),
+         consumption_acre = consumption_total/acres)
+
+# get ignition time
+timing_info <- read.csv(paste(results_output_link, "/csvs/fire_emissions.csv", sep = "")) %>% 
+  select(date_time, flame_profile) %>% 
+  filter(flame_profile!= 0) %>%
+  mutate(date_time = as_datetime(date_time) + as.numeric(str_sub(basic_burn_info$utc_offset, start = 1, end=3))*3600) %>% 
+  arrange(date_time) %>% 
+  mutate(date_time = str_sub(date_time, start = 6)) %>% 
+  summarise(flaming_start = min(date_time),
+         flaming_end = max(date_time))
+  
+# burn info combined
+burn_info <- basic_burn_info %>% 
+  add_column(flaming_start = timing_info$flaming_start,
+             flaming_end = timing_info$flaming_end)
+
+# create sf object of burn location
+burn_loc <- burn_info %>% 
+  dplyr::select(lon, lat)
+
+# create sf object of burn location
+burn_loc_sf <- st_as_sf(burn_loc,
+                        coords = c("lon", "lat"),
+                        crs = st_crs("EPSG:4326"))
+
+# read in dispersion breakpoints and id the state where burn is happening
+regions <- st_read("region") #for testing: replace with "../gis/regions"
+regions_sf <- st_transform(regions, crs = st_crs(burn_loc_sf))
+burn_region <- as.character(regions$REGION[st_intersects(burn_loc_sf, regions_sf)[[1]]])
+
+# update burn info with region
+burn_info <- burn_info %>% 
+  mutate(region = burn_region)
+
+# lat_long value
+lat_lon <- paste(burn_info$lat, burn_info$lon, sep = ", ")
+
+# table values
+tbf_vals <- burn_info %>% 
+  mutate(date = as.character(date)) %>% 
+  mutate(consumption_acre = round(consumption_acre, 2)) %>% 
+  add_column("lat_lon", lat_lon) %>% 
+  select(date, lat_lon, acres, flaming_start, flaming_end, consumption_acre) %>% 
+  gather("var", "val")
+
+# generate kable of basic burn information
+burn_kable <- tibble(vars = c("Date", "Coordinates", "Acreage", "Flaming Start", "Flaming End", "Consumption (tons/acre)"),
+                     vals = tbf_vals$val) %>%
+  kbl(col.names = NULL) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>% 
+  # kable(escape = FALSE, linesep = "", format = "html") %>% 
+  column_spec(1, bold = T)
+  
+
+
+## GENERTE DATA FOR RECENT AIR QUALITY ----------------------------------------------
+# start and end dates for pulling air quality monitor data
+startdate <- burn_info$date - lubridate::ddays(3)
+enddate <- burn_info$date - lubridate::ddays(1)
+
+
+rec_daily_df <- tryCatch(
+  expr = {
+    # pull air quality monitoring data and subset to nearest 30 monitors
+    near_30 <- 
+      # Load latest monitoring data from AirNow
+      monitor_loadLatest() %>%
+      # Only retain monitors within 300km of the burn
+      monitor_filterByDistance(
+        longitude = burn_info$lon,
+        latitude = burn_info$lat,
+        radius = 300000, # 300km
+        addToMeta = TRUE
+      ) %>%
+      # Order monitors by distance from target
+      monitor_arrange(distanceFromTarget) %>%
+      # Only retain the 30 closest monitors
+      monitor_slice_head(30)
+    
+    # filter to 3 days before burn and get mean values
+    near_30_df <- near_30$data %>% 
+      # mutate(datetime = ymd(as_date(datetime))) %>% 
+      # filter(datetime >= (ymd(as_date(Sys.time())) - 3) & datetime <= (ymd(as_date(Sys.time())) - 1)) %>% 
+      
+      mutate(datetime = ymd(as_date(datetime))) %>% 
+      filter(datetime >= startdate & datetime <= enddate) %>% 
+      
+      group_by(datetime) %>% 
+      summarise_all(.funs = mean, na.rm = TRUE) %>% 
+      ungroup() %>% 
+      gather(deviceDeploymentID, pm_val, -datetime) %>% 
+      mutate(aqi_col = aqiColors(pm_val,
+                                 pollutant = c("PM2.5"),
+                                 palette = c("EPA")),
+             aqi_cat = cut(pm_val, 
+                           breaks = US_AQI$breaks_AQI,
+                           labels = US_AQI$names_eng)) %>% 
+      left_join(., near_30$meta, by = "deviceDeploymentID") %>% 
+      mutate(siteName = str_to_title(locationName))
+    
+    # most recent daily AQI
+    rec_daily_df <- near_30_df %>% 
+      filter(datetime == max(datetime)) %>% 
+      mutate(mon_v5_url = paste0('<a href = "https://tools.airfire.org/monitoring/v5/?centerlat=',
+                                 latitude,
+                                 '&centerlon=',
+                                 longitude,
+                                 '&zoom=9&monitors=',
+                                 deviceDeploymentID,
+                                 '&", target=\"_blank\">',
+                                 siteName,
+                                 '</a>'))
+  },
+  error = function(e) {
+    logger.error("FAILED TO LOAD MONITORING DATA")
+    logger.error(e)
+    return(NULL)
+  }
+)
+
+
+# subset to separate dfs for permanent and temporary monitors
+perm_mon_df <- 
+  if ( !(is.null(rec_daily_df)) ) {
+    rec_daily_df %>%  
+      dplyr::filter(deploymentType == "Permanent")
+  } else {
+    NULL
+  } 
+
+temp_mon_df <- 
+  if( !(is.null(rec_daily_df)) ) {
+    rec_daily_df %>%
+      dplyr::filter(deploymentType == "Temporary")
+  } else{
+    NULL
+  } 
+
+
+# vector of named AQI colors to assign to airnow polygons; note: needs full spelling of USG
+namedColors <- US_AQI$colors_EPA
+names(namedColors) <- c(US_AQI$names_eng[1:2], "Unhealthy for Sensitive Groups", US_AQI$names_eng[4:6])
+
+# read in kml of airnow aqi forecast for today
+airnow_today <- NULL
+
+tryCatch(
+  expr = {
+    # NOTE:  This ran into problems in the docker container:  ! object 'Description' not found
+    sf <- 
+      sf::st_read("https://s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/today/forecast_today_usa.kml", quiet = TRUE) %>%
+      sf::st_zm() %>%
+      rowwise()
+    
+    logger.trace("  names = '%s'", paste0(names(sf), collapse = ", "))
+    
+    if ( "description" %in% names(sf) ) {
+      sf <-
+        sf %>%
+        mutate(
+          aqi_cat = html_text(html_nodes(read_html(description), "i")),
+          aqi_color = unname(namedColors[aqi_cat])
+        ) %>%
+        filter(!(aqi_cat == "Good"))
+      airnow_today <- sf
+    } else if ( "Description" %in% names(sf) ) {
+      sf <-
+        sf %>% 
+        mutate(
+          aqi_cat = html_text(html_nodes(read_html(Description), "i")),
+          aqi_color = unname(namedColors[aqi_cat])
+        ) %>%
+        filter(!(aqi_cat == "Good"))
+      airnow_today <- sf
+    }
+    
+  },
+  error = function(e) {
+    logger.error("FAILED TO LOAD forecast_today_usa.kml")
+    logger.error(e)
+  }
+)
+
+# * airnow_tomorrow ----
+
+
+# read in kml of airnow aqi forecast for tomorrow
+airnow_tomorrow <- NULL
+
+tryCatch(
+  expr = {
+    # NOTE:  This ran into problems in the docker container:  ! object 'Description' not found
+    sf <- 
+      sf::st_read("https:/s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/today/forecast_tomorrow_usa.kml", quiet = TRUE) %>%
+      sf::st_zm() %>%
+      rowwise()
+    
+    logger.trace("  names = '%s'", paste0(names(sf), collapse = ", "))
+    
+    if ( "description" %in% names(sf) ) {
+      sf <-
+        sf %>%
+        mutate(
+          aqi_cat = html_text(html_nodes(read_html(description), "i")),
+          aqi_color = unname(namedColors[aqi_cat])
+        ) %>%
+        filter(!(aqi_cat == "Good"))
+      airnow_tomorrow <- sf
+    } else if ( "Description" %in% names(sf) ) {
+      sf <-
+        sf %>%
+        mutate(
+          aqi_cat = html_text(html_nodes(read_html(Description), "i")),
+          aqi_color = unname(namedColors[aqi_cat])
+        ) %>%
+        filter(!(aqi_cat == "Good"))
+      airnow_tomorrow <- sf
+    }
+    
+  },
+  error = function(e) {
+    logger.error("FAILED TO LOAD forecast_tomorrow_usa.kml")
+    logger.error(e)
+  }
+)
+
+
+# create contact info object
+contact_info <- tibble(name = if(params$AUTHOR != "") {params$AUTHOR} else{NA},
+                       phone = if(params$PHONE != "") {params$PHONE} else{NA},
+                       email = if(params$EMAIL != "") {params$EMAIL} else{NA}) %>% 
+  select_if(~ !any(is.na(.))) %>% 
+  unite("contact", sep=", ") %>% 
+  dplyr::pull(contact)
+
+
+# forecasted AQI statement
+forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI for areas downwind of the planned burn is ",
+                                                                      params$FORECAST_AQI_SELECT,
+                                                                      ".**",
+                                                                      sep = "")} else{""}
+
+# superfog statement
+# superfog_sen <- if(params$SUPERFOG_SCREEN_SELECT == "Yes") {"*The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.*"} else{"*The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.*"}
+
+# superfog_sen <- ifelse(is.null(params$SUPERFOG_SCREEN_SELECT), 
+#                          NULL,
+#                        ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
+#                               "*The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.*",
+#                               "*The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.*"))
+
+
+superfog_sen <- ifelse(burn_info$region == "08",
+                       ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
+                              "**The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.**",
+                              "**The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.**"),
+                       "")
+
+
+
+```
+
+<br>
+<div class="fire_info_wrapper">
+  <div>
+  <p class="paragraph">
+This report documents the recent air quality, smoke analysis and weather forecast for the `r params$BURN_NAME` prescribed fire on the `r params$FOREST`. <br><br> Additional smoke modeling output can be found at the [BlueSky Playground Dispersion Results](`r bsky_link`). <br><br> **For more information:** <br>`r contact_info`
+  </p>
+  </div>
+  <div>
+  </div>
+  <div>
+```{r fire_info_tbl, fig.height = 6, fig.width = 6, echo = FALSE, warning = FALSE}
+burn_kable
+```
+  </div>
+</div>
+
+## Recent Air Quality in Area 
+
+Shown below is the recently measured air quality index (AQI) in the area. The map shows the location of the burn and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days. Lastly, the AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. Additional information for your area can be found on the [Fire and Smoke Map](https://fire.airnow.gov/) and [EPA AirNow Map](https://gispub.epa.gov/airnow/).  `r if(!(is.null(params$FORECAST_AQI_SELECT))){forecast_aqi_sen}`
+
+```{r burn_map_aqi, out.width="100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+## CREATE MAP OF BURN AND NEARBY AQ MONITORS ----------------------------------------------
+
+# read in burn icon for mapping
+burn_icon <- tibble(x = burn_info$lon,
+                        y = burn_info$lat,
+                        image = "redFlame.png")
+
+
+## CREATE MAP OF BURN AND NEARBY AQ MONITORS ---------------------------------
+
+# prep legend
+# html_legend <- "<img src='https://fire.airnow.gov/8047b300ec26700b8e475a895fbd50ba.png'style='width:15px;height:20px;'>Burn&nbsp;location<br/>
+# <img src='https://fire.airnow.gov/be7e1e18f22c71d4b09c333d7ac56460.png'style='width:15px;height:15px;'>Permanent&nbsp;monitor<br/>
+# <img src='https://fire.airnow.gov/07939407ecc29c4bde560ae7071031d4.png'style='width:15px;height:15px;'>Temporary&nbsp;monitor<br/>"
+# 
+
+html_legend <- "<img src='https://github.com/jeremyash/icons/blob/main/redFlame.png?raw=true'style='width:15px;height:20px;'>&nbsp;Burn&nbsp;location<br/>
+<img src='https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>
+<img src='https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
+
+
+# function to create color-fillable icons for temp monitors, color coded by AQI 
+pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = "black",...) {
+  n <- length(pch)
+  files <- character(n)
+  # create a sequence of png images
+  for (i in seq_len(n)) {
+    f <- tempfile(fileext = '.png')
+    png(f, width = width, height = height, bg = "transparent")
+    par(mar = c(0, 0, 0, 0))
+    plot.new()
+    points(.5, .5, pch = pch[i], col = col[1], bg = bg_icon[1], cex = min(width, height) / 8, ...)
+    dev.off()
+    files[i] <- f
+  }
+  files
+}
+
+# apply function to temporary monitor data and add to df
+temp_mon_df$icons <- if(!(is.null(temp_mon_df))) {unlist(lapply(temp_mon_df$aqi_col, function(x) pchIcons(24, 60, 60, bg_icon = x, col = "black", lwd = 2)))} else{NULL}
+
+
+# generate base leaflet map
+air_mon_leaflet <- 
+  leaflet() %>% 
+  addTiles() %>%
+  
+  # fire location
+  addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
+             icon = list(
+               # iconUrl = "https://fire.airnow.gov/8047b300ec26700b8e475a895fbd50ba.png",
+              iconUrl = "redFlame.png",
+              iconSize = c(25, 35))) %>% 
+
+  
+  # icon legend
+  addControl(html = html_legend, position = "bottomleft") %>%
+  
+  # aqi legend
+  addLegend(colors = US_AQI$colors_EPA,
+            labels = US_AQI$names_eng,
+            opacity = 0.75,
+            title = "AQI",
+            position = "bottomleft") %>% 
+  
+  # set scale of map viewer
+  fitBounds(lng1 = burn_info$lon - 0.5,
+            lat1 = burn_info$lat - 0.5,
+            lng2 = burn_info$lon + 0.5,
+            lat2 = burn_info$lat + 0.5) %>% 
+  
+  # scale bar
+  addScaleBar(position = "bottomright") 
+
+
+# conditional add of AQI forecast 
+air_mon_leaflet <-  
+  if ( is.null(airnow_today) | is.null(airnow_tomorrow) ) {
+    air_mon_leaflet
+  } else{
+    air_mon_leaflet %>% 
+      # aqi today forecast
+      addPolygons(data = airnow_today,
+                  fillColor = ~aqi_color,
+                  fillOpacity = 0.75,
+                  color = ~aqi_color, 
+                  opacity = 0.75,
+                  group = "Forecast AQI Today") %>%
+      
+      # aqi tomorrow forecast
+      addPolygons(data = airnow_tomorrow,
+                  fillColor = ~aqi_color,
+                  fillOpacity = 0.75,
+                  color = ~aqi_color, 
+                  opacity = 0.75,
+                  group = "Forecast AQI Tomorrow") %>%
+      
+      # layers control
+      addLayersControl(
+        overlayGroups = c("Forecast AQI Today", "Forecast AQI Tomorrow"),
+        options = layersControlOptions(collapsed = FALSE)) %>% 
+      hideGroup("Forecast AQI Today") %>% 
+      hideGroup("Forecast AQI Tomorrow")
+  }
+
+# conditional add of temporary monitors   
+air_mon_leaflet <-
+  if ( dim(temp_mon_df)[1] > 0 ) {
+    air_mon_leaflet %>% 
+      addMarkers(
+        lng = ~longitude,
+        lat = ~latitude,
+        icon = list(
+          iconUrl = ~icons,
+          iconSize = c(15, 15)),
+        popup = ~mon_v5_url,
+        data = temp_mon_df)
+  } else {
+    air_mon_leaflet
+  }
+
+# conditional add of permanent monitors
+air_mon_leaflet <-  
+  if ( dim(perm_mon_df)[1] > 0 ) {
+    air_mon_leaflet %>%  
+      addCircleMarkers(
+        lng = ~longitude,
+        lat = ~latitude,
+        fillColor = ~aqi_col,
+        fillOpacity = 1,
+        stroke = TRUE, 
+        color = "black",
+        popup = ~mon_v5_url,
+        radius = 8,
+        weight = 1,
+        data = perm_mon_df)
+  } else{
+    air_mon_leaflet
+  }
+
+
+
+# aqi_table 
+aqi_kable <- tibble('Air Quality Index (AQI)' = c("Good", "Moderate", "USG", "Unhealthy", "Very Unhealthy", "Hazardous"),
+                    'Actions to Protect Yourself' = AirMonitor::US_AQI$actions_eng) %>%
+  mutate('Air Quality Index (AQI)' = cell_spec(c("Good", "Moderate", "USG", "Unhealthy", "Very Unhealthy", "Hazardous"), 
+                                               color = c("black", "black", "black", "white", "white", "white"), bold = T, format = "html", background = US_AQI$colors_EPA)) %>% 
+  kable(escape = FALSE, linesep = "", format = "html" ) %>%
+  kable_styling(full_width = F, position = "center")
+
+ 
+# show leaflet map
+air_mon_leaflet 
+ 
+# show aqi color scheme and explanations
+aqi_kable
+
+
+```
+
+**Note**: Generally, smoke sensitive people are kids and older adults along with those who have cardiovascular or respiratory conditions.
+
+For more smoke and health information: [https://airnow.gov/](https://airnow.gov/)
+
+
+## Modeled Smoke Dispersion
+Below are the smoke modeling outputs for the day of the planned burn. The maps below show the __daily average concentrations__ (top panel) and __daily average visual range__ (bottom panel) for `r burn_info$date`. Zoom in/out on each of the interactive maps to view particular features.
+
+
+```{r leaflet_map_data_mgt, include = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
+
+## READ IN POP/SVI DATA ----------------------------------------------
+
+# census data
+pop <- readRDS("population_aggregate_factor.rds") 
+
+# SVI data
+# svi <- readRDS("svi.rds") 
+
+
+## DOWNLOAD DATA FROM BSKY DISPERSION RESULTS ----------------------------------------------
+
+# create outlook directory
+dir.create("temp")
+outlook_path <- "temp"
+  
+# smoke dispersion
+smoke_disp_link <- paste(results_output_link,
+                         "/output/smoke_dispersion.kmz", sep = "")
+
+# download smoke dispersion into a zip and regular version 
+curl_download(smoke_disp_link, destfile = paste(outlook_path,
+                                                "/smoke_dispersion.kmz.zip",
+                                                sep = ""))
+# unzip the file
+unzip(zipfile = paste(outlook_path,
+                      "/smoke_dispersion.kmz.zip",
+                      sep = ""),
+      exdir = outlook_path)
+
+# get rid of zip file
+file.remove(paste(outlook_path,
+                  "/smoke_dispersion.kmz.zip",
+                  sep = ""))
+
+# grid info to get extent of png files
+grid_info_link <- paste(results_output_link, 
+                        "/output/grid_info.json", sep = "")
+
+# download grid info
+grid_info <- fromJSON(file=paste(results_output_link, 
+                    "/output/grid_info.json", sep = ""))[[1]]
+
+
+## READ IN SMOKE DISPERSION RESULTS AND RECODE FOR PLOTTING ----------------------------------------------
+
+# read in hex codes
+avg_pal <- read_csv("bsky_new_color_ramp.csv") 
+vis_pal <- read_csv("bsky_vis_color_ramp.csv") 
+
+
+# burn CRS
+burn_crs <- st_crs(read_sf(paste(outlook_path,
+                                 "/doc.kml", sep = "")))
+
+# read PNG files
+day_one_vis <- readPNG(paste(outlook_path,
+                             "/visualrange_100m_daily_minimum_UTC",
+                             gsub(":", "", burn_info$utc_offset),
+                             "_RainbowColorBarVisualRange_",
+                             burn_info$date_time, 
+                             ".png", sep = ""))
+
+
+day_one_avg <- readPNG(paste(outlook_path,
+                             "/pm25_100m_daily_average_UTC",
+                             gsub(":", "", burn_info$utc_offset),
+                            "_GreyColorBar_",
+                             burn_info$date_time, 
+                             ".png", sep = ""))
+
+# collapse RGB bands into one with hex codes as values
+day_one_vis_r <- as.raster(day_one_vis)
+day_one_avg_r <- as.raster(day_one_avg)
+
+
+
+# replace hex codes with PM categories, including an option whether to code the lowest category as NA
+day_one_avg_r[day_one_avg_r == "#CCE5FFB2"] <- ifelse(params$DROP_LOW_AVG == "Yes", 
+                                                      avg_pal$pm[avg_pal$hex == "#00000000"],
+                                                      avg_pal$pm[avg_pal$hex == "#CCE5FFB2"])
+day_one_avg_r[day_one_avg_r == "#99CCFFB2"] <- avg_pal$pm[avg_pal$hex == "#99CCFFB2"] #2
+day_one_avg_r[day_one_avg_r == "#0D98BAB2"] <- avg_pal$pm[avg_pal$hex == "#0D98BAB2"] #3
+day_one_avg_r[day_one_avg_r == "#9ACD32B2"] <- avg_pal$pm[avg_pal$hex == "#9ACD32B2"] #4
+day_one_avg_r[day_one_avg_r == "#FFFF00B2"] <- avg_pal$pm[avg_pal$hex == "#FFFF00B2"] #5
+day_one_avg_r[day_one_avg_r == "#FF6600B2"] <- avg_pal$pm[avg_pal$hex == "#FF6600B2"] #6
+day_one_avg_r[day_one_avg_r == "#C71585B2"] <- avg_pal$pm[avg_pal$hex == "#C71585B2"] #7
+day_one_avg_r[day_one_avg_r == "#2B0A78B2"] <- avg_pal$pm[avg_pal$hex == "#2B0A78B2"] #8
+day_one_avg_r[day_one_avg_r == "#00000000"] <- avg_pal$pm[avg_pal$hex == "#00000000"] #0
+
+
+day_one_vis_r[day_one_vis_r == "#2B0A78B2"] <- vis_pal$miles[vis_pal$hex == "#2B0A78B2"]  #1
+day_one_vis_r[day_one_vis_r == "#722789B2"] <- vis_pal$miles[vis_pal$hex == "#722789B2"] #2
+day_one_vis_r[day_one_vis_r == "#C71585B2"] <- vis_pal$miles[vis_pal$hex == "#C71585B2"] #3
+day_one_vis_r[day_one_vis_r == "#FF0000B2"] <- vis_pal$miles[vis_pal$hex == "#FF0000B2"] #4
+day_one_vis_r[day_one_vis_r == "#FF0000B2"] <- vis_pal$miles[vis_pal$hex == "#FF0000B2"] #5
+day_one_vis_r[day_one_vis_r == "#FFFF00B2"] <- vis_pal$miles[vis_pal$hex == "#FFFF00B2"] #6
+day_one_vis_r[day_one_vis_r == "#9ACD32B2"] <- vis_pal$miles[vis_pal$hex == "#9ACD32B2"] #6
+day_one_vis_r[day_one_vis_r == "#00FF00B2"] <- vis_pal$miles[vis_pal$hex == "#00FF00B2"] #6
+day_one_vis_r[day_one_vis_r == "#0D98BAB2"] <- vis_pal$miles[vis_pal$hex == "#0D98BAB2"] #0
+day_one_vis_r[day_one_vis_r == "#0000FFB2"] <- vis_pal$miles[vis_pal$hex == "#0000FFB2"] #5
+day_one_vis_r[day_one_vis_r == "#99CCFFB2"] <- vis_pal$miles[vis_pal$hex == "#99CCFFB2"] #6
+day_one_vis_r[day_one_vis_r == "#CCE5FFB2"] <- vis_pal$miles[vis_pal$hex == "#CCE5FFB2"] #6
+day_one_vis_r[day_one_vis_r == "#FFFFFFB2"] <- vis_pal$miles[vis_pal$hex == "#FFFFFFB2"] #6
+day_one_vis_r[day_one_vis_r == "#00000000"] <- vis_pal$miles[vis_pal$hex == "#00000000"] #0
+
+
+# convert to matrix and change values to numeric
+day_one_vis_m <- matrix(as.numeric(day_one_vis_r),
+                        nrow = dim(day_one_vis_r)[1],
+                        ncol = dim(day_one_vis_r)[2],
+                        byrow = TRUE)
+
+day_one_avg_m <- matrix(as.numeric(day_one_avg_r),
+                        nrow = dim(day_one_avg_r)[1],
+                        ncol = dim(day_one_avg_r)[2],
+                        byrow = TRUE)
+
+
+# convert to raster
+day_one_vis_ras <- rast(day_one_vis_m)
+day_one_avg_ras <- rast(day_one_avg_m)
+
+
+# ratify raster (convert to factor)
+day_one_vis_ras <- as.factor(day_one_vis_ras)
+day_one_avg_ras <- as.factor(day_one_avg_ras)
+
+# data frame of levels for day one vis including/excluding lowest level
+vis_levels <- list(data.frame(ID = seq(1,13,1),
+                                    vis = c("0.00-0.04", "0.04-0.08", "0.08-0.15", "0.15-0.25", "0.25-0.50", "0.50-1", "1-2", "2-3", "3-4", "4-5", "5-20", "20-50", ">50" )))
+
+
+# data frame of levels for day one avg including/excluding lowest level
+avg_levels_w_low <- list(data.frame(ID = seq(1,8,1),
+                                    pm = c("1-9", "9-35", "35-55", "55-150", "150-250", "250-350", "350-500", ">500")))
+
+avg_levels_wo_low <- list(data.frame(ID = seq(2,8,1),
+                                     pm = c("9-35", "35-55", "55-150", "150-250",  "250-350", "350-500", ">500")))
+
+
+
+# add levels of factor in dataframe
+levels(day_one_vis_ras) <- vis_levels 
+
+levels(day_one_avg_ras) <- ifelse(params$DROP_LOW_AVG == "Yes", 
+                                  avg_levels_wo_low,
+                                  avg_levels_w_low)
+
+
+# set extent of raster
+ext(day_one_vis_ras) <- ext(c(grid_info[1], 
+                                    grid_info[3],
+                                    grid_info[2],
+                                    grid_info[4]))
+
+ext(day_one_avg_ras) <- ext(c(grid_info[1], 
+                                    grid_info[3],
+                                    grid_info[2],
+                                    grid_info[4]))
+
+# same crs as the doc.kml
+crs(day_one_vis_ras) <- burn_crs$proj4string
+crs(day_one_avg_ras) <- burn_crs$proj4string
+
+
+
+
+## PREP POPULATION AND SVI DATA ----------------------------------------------
+
+# create buffer around ignition to clip SVI/pop rasters
+burn_buf <- st_buffer(burn_loc_sf, dist = 500000)
+
+#SVI with buffer
+# svi_cr <- crop(svi, burn_buf, snap="out")                    
+# svi_fr <- rasterize(burn_buf, svi_cr) 
+# svi_buf <- mask(x=svi_cr, mask=svi_fr)
+
+#pop with buffer
+pop_cr <- crop(pop, burn_buf, snap="out")                    
+pop_fr <- rasterize(burn_buf, pop_cr) 
+pop_buf <- mask(x=pop_cr, mask=pop_fr)
+
+
+
+## LEAFLET PLOTTING OF DAILY AVERAGE SMOKE AND VISUAL RANGE ----------------------------------------------
+
+# vis color ramp
+vis_col_ramp <- vis_pal %>% 
+  pull(hex)
+vis_col_ramp_hex <- vis_col_ramp[-c(14)]
+
+# avg color ramp
+avg_col_ramp <- avg_pal %>% 
+  pull(hex)
+avg_col_ramp_hex <- if(params$DROP_LOW_AVG == "Yes") avg_col_ramp[-c(1,9)] else avg_col_ramp[-c(9)]
+
+
+# create color palette function for max
+vis_pal_fun <- colorFactor(palette = vis_col_ramp_hex,
+                       levels = levels(day_one_vis_ras)[[1]][1]$ID,
+                       na.color = "transparent")
+
+# create color palette function for avg
+avg_pal_fun <- colorFactor(palette = avg_col_ramp_hex,
+                       levels = levels(day_one_avg_ras)[[1]][1]$ID,
+                       na.color = "transparent")
+
+# create color palette function for SVI
+# svi_pal_fun <- colorBin(palette = "Purples",
+#   bins = c(seq(0, 1, 0.1)),
+#   na.color = "transparent")
+
+# create color palette function for pop
+pop_pal_fun <- colorFactor(palette = "magma",
+                    levels = levels(pop_buf)[[1]][1]$ID,
+                    reverse = TRUE,
+                    na.color = "transparent")
+
+
+# # create color palette function for circle markers
+# cir_pal_fun <- colorFactor(palette = "cividis",
+#                     levels = c(402.336, 804.672, 1609.34, 3218.69, 8046.72, 16093.4),
+#                     reverse = TRUE,
+#                     na.color = "transparent")
+
+# generate leaflet map for average smoke
+# avg_leaflet <- leaflet() %>% 
+#   addTiles() %>% 
+#   
+#   addProviderTiles("OpenStreetMap",
+#                    group = "Street") %>%
+#   addProviderTiles("Esri.WorldImagery",
+#                     group = "Terrain") %>%
+#   
+#   
+#   # add mappanes to always keep circles, then smoke on top
+#   addMapPane("pop_map", zIndex = 410) %>%
+#   # addMapPane("svi_map", zIndex = 410) %>%
+#   addMapPane("smoke_map", zIndex = 420) %>%
+#   addMapPane("cir_map", zIndex = 430) %>%
+# 
+#   #daily average smoke conditions
+#   addRasterImage(day_one_avg_ras,
+#                 colors = avg_pal_fun,
+#                 opacity = 0.75,
+#                 group = "Smoke",
+#            options=gridOptions(pane="smoke_map")) %>%
+#   addLegend(pal = avg_pal_fun,
+#            values = levels(day_one_avg_ras)[[1]][1]$ID,
+#            labFormat  = labelFormat(
+#              transform = function(x) {
+#              levels(day_one_avg_ras)[[1]]$pm[which(levels(day_one_avg_ras)[[1]]$ID == x)]}),
+#             opacity = 0.75,
+#            title = "PM2.5 (ug m^-3)",
+#            group = "Smoke") %>%
+# 
+#   # fire location
+#  addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
+#              icon = list(
+#                iconUrl = "redFlame.png",
+#                iconSize = c(25, 35))) %>%
+# 
+#   # circular buffers around fire
+#   addCircles(data = burn_loc, lng = ~lon, lat = ~lat,
+#              radius = c(402.336, 804.672, 1609.34, 3218.69, 8046.72, 16093.4, 32186.8),
+#              color = viridis::viridis(7),
+#              weight = 5,
+#              opacity = 0.8, 
+#              fill = FALSE,
+#              group = "Distance from Fire",
+#            options=gridOptions(pane="cir_map")) %>% 
+#   
+#   addLegend(values = c(402.336, 804.672, 1609.34, 3218.69, 8046.72, 16093.4, 32186.8),
+#            colors = viridis::viridis(7),
+#            labels = c(0.25, 0.5, 1, 2, 5, 10, 20),
+#             opacity = 0.75,
+#            position = "bottomleft",
+#            title = "Distance from Fire (miles)",
+#            group = "Distance from Fire") %>% 
+# 
+#   # SVI data
+#   # addRasterImage(svi_buf,
+#   #                colors = svi_pal_fun,
+#   #                opacity = 0.75,
+#   #                group = "Social Vulnerability Index",
+#   #                options= gridOptions(pane="svi_map")) %>%
+#   # addLegend(pal = svi_pal_fun,
+#   #           opacity = 0.75,
+#   #           values = seq(0,1,0.1),
+#   #           group = "Social Vulnerability Index",
+#   #           position = "bottomleft",
+#   #           labels = seq(0,1,0.1),
+#   #           title = "Social Vulnerability Index") %>%
+# 
+#   # Pop data
+#   addRasterImage(pop_buf,
+#                  colors = pop_pal_fun,
+#                  opacity = 0.75,
+#                  group = "Population",
+#                  options= gridOptions(pane="pop_map")) %>%
+#   addLegend(pal = pop_pal_fun,
+#            values = levels(pop_buf)[[1]][1]$ID,
+#            labFormat  = labelFormat(
+#              transform = function(x) {
+#              levels(pop_buf)[[1]]$val[which(levels(pop_buf)[[1]]$ID == x)]}),
+#             opacity = 0.75,
+#            position = "bottomleft",
+#            title = "Population",
+#            group = "Population") %>%
+# 
+#   # set scale of map viewer
+#   fitBounds(lng1 = burn_icon$x - 0.5,
+#             lat1 = burn_icon$y - 0.5,
+#             lng2 = burn_icon$x + 0.5,
+#             lat2 = burn_icon$y + 0.5) %>%
+# 
+#   # scale bar
+#   addScaleBar(position = "bottomright") %>% 
+#   
+#   # basemap toggle
+#   addLayersControl(baseGroups = c("Street", "Terrain"),
+#                    position = "topright") %>%
+# 
+#   # add layer control to map
+#   addLayersControl(
+#     # overlayGroups = c("Smoke", "Population", "Social Vulnerability Index"),
+#     overlayGroups = c("Smoke", "Distance from Fire", "Population"),
+#     options = layersControlOptions(collapsed = FALSE)) %>%
+#   hideGroup("Population") %>%
+#   hideGroup("Distance from Fire")
+# # hideGroup("Social Vulnerability Index")
+
+
+avg_leaflet <- leaflet() %>% 
+  addTiles() %>% 
+  
+  addProviderTiles("OpenStreetMap",
+                   group = "Street") %>% 
+                   # options  = providerTileOptions(zIndex = 300)) %>%
+  addProviderTiles("Esri.WorldImagery",
+                    group = "Terrain") %>% 
+                   # options  = providerTileOptions(zIndex = 300)) %>%
+  
+  
+  # # add mappanes to always keep circles, then smoke on top
+  addMapPane("pop_map", zIndex = 450) %>%
+  # # addMapPane("svi_map", zIndex = 410) %>%
+  addMapPane("smoke_map", zIndex = 460) %>%
+  addMapPane("cir_map", zIndex = 470) %>%
+  
+  #daily average smoke conditions
+  addRasterImage(day_one_avg_ras,
+                colors = avg_pal_fun,
+                opacity = 0.75,
+                group = "Smoke",
+           options=gridOptions(pane="smoke_map")) %>%
+  addLegend(pal = avg_pal_fun,
+           values = levels(day_one_avg_ras)[[1]][1]$ID,
+           labFormat  = labelFormat(
+             transform = function(x) {
+             levels(day_one_avg_ras)[[1]]$pm[which(levels(day_one_avg_ras)[[1]]$ID == x)]}),
+            opacity = 0.75,
+           title = "PM2.5 (ug m^-3)",
+           group = "Smoke") %>%
+
+  # fire location
+ addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
+             icon = list(
+               iconUrl = "redFlame.png",
+               iconSize = c(25, 35))) %>%
+
+ #  # circular buffers around fire
+  addCircles(data = burn_loc, lng = ~lon, lat = ~lat,
+             radius = c(402.336, 804.672, 1609.34, 3218.69, 8046.72, 16093.4, 32186.8),
+             color = viridis::viridis(7),
+             weight = 5,
+             opacity = 0.8,
+             fill = FALSE,
+             group = "Distance from Fire",
+           options=gridOptions(pane="cir_map")) %>%
+
+  addLegend(values = c(402.336, 804.672, 1609.34, 3218.69, 8046.72, 16093.4, 32186.8),
+           colors = viridis::viridis(7),
+           labels = c(0.25, 0.5, 1, 2, 5, 10, 20),
+            opacity = 0.75,
+           position = "bottomleft",
+           title = "Distance from Fire (miles)",
+           group = "Distance from Fire") %>%
+
+  # SVI data
+  # addRasterImage(svi_buf,
+  #                colors = svi_pal_fun,
+  #                opacity = 0.75,
+  #                group = "Social Vulnerability Index",
+  #                options= gridOptions(pane="svi_map")) %>%
+  # addLegend(pal = svi_pal_fun,
+  #           opacity = 0.75,
+  #           values = seq(0,1,0.1),
+  #           group = "Social Vulnerability Index",
+  #           position = "bottomleft",
+  #           labels = seq(0,1,0.1),
+  #           title = "Social Vulnerability Index") %>%
+
+  # # Pop data
+  addRasterImage(pop_buf,
+                 colors = pop_pal_fun,
+                 opacity = 0.75,
+                 group = "Population",
+                 options= gridOptions(pane="pop_map")) %>%
+  addLegend(pal = pop_pal_fun,
+           values = levels(pop_buf)[[1]][1]$ID,
+           labFormat  = labelFormat(
+             transform = function(x) {
+             levels(pop_buf)[[1]]$val[which(levels(pop_buf)[[1]]$ID == x)]}),
+            opacity = 0.75,
+           position = "bottomleft",
+           title = "Population",
+           group = "Population") %>%
+
+  # set scale of map viewer
+  fitBounds(lng1 = burn_icon$x - 0.5,
+            lat1 = burn_icon$y - 0.5,
+            lng2 = burn_icon$x + 0.5,
+            lat2 = burn_icon$y + 0.5) %>%
+
+  # scale bar
+  addScaleBar(position = "bottomright") %>% 
+  
+
+  # add layer control to map
+  addLayersControl(
+    # overlayGroups = c("Smoke", "Population", "Social Vulnerability Index"),
+    overlayGroups = c("Smoke", "Distance from Fire", "Population"),
+    baseGroups = c("Street", "Terrain"),
+    options = layersControlOptions(zIndex = 490,
+                                   collapsed = FALSE)) %>%
+  hideGroup("Population") %>%
+  hideGroup("Distance from Fire") 
+# hideGroup("Social Vulnerability Index")
+  
+  
+
+
+
+# generate leaflet map for visual range
+vis_leaflet <- leaflet() %>% 
+  addTiles() %>%
+
+  # plot visual range raster
+  addRasterImage(day_one_vis_ras,
+                 colors = vis_pal_fun,
+                 opacity = 0.75) %>%
+  addLegend(pal = vis_pal_fun, 
+            values = levels(day_one_vis_ras)[[1]][1]$ID,
+            labFormat  = labelFormat(
+              transform = function(x) {
+                levels(day_one_vis_ras)[[1]]$vis[which(levels(day_one_vis_ras)[[1]]$ID == x)]}),
+            opacity = 0.75, 
+            title = "Miles") %>% 
+  
+  ## fire location
+  addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
+             icon = list(
+               iconUrl = "redFlame.png",
+               iconSize = c(25, 35))) %>% 
+  
+  fitBounds(lng1 = burn_icon$x - 0.5,
+            lat1 = burn_icon$y - 0.5,
+            lng2 = burn_icon$x + 0.5,
+            lat2 = burn_icon$y + 0.5) %>% 
+  addScaleBar(position = "bottomright")
+
+
+# remove smoke dispersion files from directory
+unlink(outlook_path,
+       recursive = TRUE)
+```
+
+__Average Daily Smoke Conditions on `r burn_info$date`:__ The average daily smoke conditions are helpful for concerns related to public health. Select 'Population' to see the number of people in each census tract surrounding the planned burn. 
+```{r avg_leaflet_map_show, out.width = "100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+
+# show leaflet map
+avg_leaflet
+
+#SVI TEXT AND REFERENCE
+# Select 'Social Vulnerability Index' to see an index showing nearby vulnerable communities (0 = low vulnerability and 1 = high vulnerability).  
+# Social Vulnerability Index: https://sedac.ciesin.columbia.edu/data/set/usgrid-us-social-vulnerability-index
+
+``` 
+
+__Maximum Hourly Impact to Visual Range on `r burn_info$date`:__ The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other areas.
+```{r vis_leaflet_map_show, out.width = "100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+
+# show leaflet map
+vis_leaflet
+
+``` 
+
+## Meteorological Conditions  
+
+```{r firepoker_link, echo = FALSE, include = FALSE }
+
+## Generate firepoker link
+
+# read in dispersion breakpoints and id the state where burn is happening
+disp_brkpts_df <- read.csv("disp_breakpoints.csv")
+states <- st_read("states")
+state_sf <- st_transform(states, crs = st_crs(burn_loc_sf))
+burn_state <- as.character(states$STATE_ABBR[st_intersects(burn_loc_sf, state_sf)[[1]]])
+
+
+disp_brkpts <- disp_brkpts_df %>% 
+  filter(state == burn_state) 
+
+
+  # create firepoker link
+  fp_url <- paste("https://www.weather.gov/dlh/fwd?lat=",
+                  round(burn_loc$lat, 3),
+                  "&lon=",
+                  round(burn_loc$lon, 3),
+                  "&clat=38.967&clon=-97.267&zoom=7.000&basemap=stamenterrain&bbox=[-16540299.098,2518065.675,-5115162.882,6915872.719]&layers=USStates|ForecastDot|Domain|SurfaceFronts|Radar|&fwf=F&dispersion=",
+                  paste(0, 
+                        disp_brkpts[2], 
+                        disp_brkpts[3],
+                        disp_brkpts[4],
+                        disp_brkpts[5],
+                        sep = ","),
+                  "&ndfd=WindGust",
+                  sep = "")
+```
+
+The predicted weather data for this area, including fire behavior and smoke parameters can be found on the [Fire Weather Dashboard](`r fp_url`). `r if(!(is.null(params$SUPERFOG_SCREEN_SELECT))){superfog_sen}`
+
+
+
+## Data Sources
+AQI: EPA data accessed via https://github.com/MazamaScience/PWFSLSmoke
+
+BlueSky Playground v3.5: https://portal.airfire.org/ 
+
+Population: https://www.earthdata.nasa.gov/data/catalog/sedac-ciesin-sedac-gpwv4-popdens-r11-4.11
+  
+
+
+
+ 
+
+
+
