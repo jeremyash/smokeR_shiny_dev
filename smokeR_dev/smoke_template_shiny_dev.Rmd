@@ -139,7 +139,8 @@ timing_info <- read.csv(paste(results_output_link, "/csvs/fire_emissions.csv", s
 # burn info combined
 burn_info <- basic_burn_info %>% 
   add_column(flaming_start = timing_info$flaming_start,
-             flaming_end = timing_info$flaming_end)
+             flaming_end = timing_info$flaming_end,
+             region = params$REGION)
 
 # create sf object of burn location
 burn_loc <- burn_info %>% 
@@ -150,10 +151,7 @@ burn_loc_sf <- st_as_sf(burn_loc,
                         coords = c("lon", "lat"),
                         crs = st_crs("EPSG:4326"))
 
-# read in dispersion breakpoints and id the state where burn is happening
-regions <- st_read("region") #for testing: replace with "../gis/regions"
-regions_sf <- st_transform(regions, crs = st_crs(burn_loc_sf))
-burn_region <- as.character(regions$REGION[st_intersects(burn_loc_sf, regions_sf)[[1]]])
+
 
 # update burn info with region
 burn_info <- burn_info %>% 
