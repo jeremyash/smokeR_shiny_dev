@@ -38,7 +38,8 @@ knitr::opts_chunk$set(echo = TRUE)
   library(egg)
   library(rvest)                # html parsing
   library(googlesheets4)        # writing logs to google sheets
-  
+
+
   # Mazama Science packages
   library(beakr)                # web service framework
   library(MazamaCoreUtils)      # cache management and more
@@ -390,34 +391,32 @@ burn_kable
 
 Shown below is the recently measured air quality index (AQI) in the area. The map shows the location of the burn and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days. Lastly, the AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. Additional information for your area can be found on the [Fire and Smoke Map](https://fire.airnow.gov/) and [EPA AirNow Map](https://gispub.epa.gov/airnow/).  `r if(!(is.null(params$FORECAST_AQI_SELECT))){forecast_aqi_sen}`
 
-```{r burn_map_aqi, out.width="100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+```{r burn_map_aqi, out.width="100%", include=TRUE, echo=FALSE, message=FALSE, results='asis', warning=FALSE}
 ## CREATE MAP OF BURN AND NEARBY AQ MONITORS ----------------------------------------------
 
 # read in burn icon for mapping
-burn_icon <- tibble(x = burn_info$lon,
-                        y = burn_info$lat,
-                        image = "red-fire-flame.png")
-
-
-## CREATE MAP OF BURN AND NEARBY AQ MONITORS ---------------------------------
+burn_icon <- tibble(
+  x = burn_info$lon,
+  y = burn_info$lat,
+  image = "red-fire-flame.png"
+)
 
 # prep legend
-html_legend <- "<img src='https://github.com/jeremyash/icons/blob/main/red-fire-flame.png?raw=true'style='width:15px;height:15px;'>&nbsp;Burn&nbsp;location<br/>
-<img src='https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>
-<img src='https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
+html_legend <- "<img src='https://github.com/jeremyash/icons/blob/main/red-fire-flame.png?raw=true' style='width:15px;height:15px;'>&nbsp;Burn&nbsp;location<br/>
+<img src='https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true' style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>
+<img src='https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true' style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
 
-
-# function to create color-fillable icons for temp monitors, color coded by AQI 
-pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = "black",...) {
+# function to create color-fillable icons for temp monitors, color coded by AQI
+pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = "black", ...) {
   n <- length(pch)
   files <- character(n)
-  # create a sequence of png images
   for (i in seq_len(n)) {
-    f <- tempfile(fileext = '.png')
+    f <- tempfile(fileext = ".png")
     png(f, width = width, height = height, bg = "transparent")
     par(mar = c(0, 0, 0, 0))
     plot.new()
-    points(.5, .5, pch = pch[i], col = col[1], bg = bg_icon[1], cex = min(width, height) / 8, ...)
+    points(.5, .5, pch = pch[i], col = col[1], bg = bg_icon[1],
+           cex = min(width, height) / 8, ...)
     dev.off()
     files[i] <- f
   }
@@ -425,132 +424,170 @@ pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = 
 }
 
 # apply function to temporary monitor data and add to df
-temp_mon_df$icons <- if(!(is.null(temp_mon_df))) {unlist(lapply(temp_mon_df$aqi_col, function(x) pchIcons(24, 60, 60, bg_icon = x, col = "black", lwd = 2)))} else{NULL}
-
+temp_mon_df$icons <- if (!(is.null(temp_mon_df))) {
+  unlist(lapply(temp_mon_df$aqi_col, function(x) {
+    pchIcons(21, 60, 60, bg_icon = x, col = "black", lwd = 2)
+  }))
+} else {
+  NULL
+}
 
 # generate base leaflet map
-air_mon_leaflet <- 
-  leaflet() %>% 
-  addProviderTiles(providers$Stadia.OSMBright) %>% 
-  
-  # fire location
-  addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
-             icon = list(
-              iconUrl = "https://github.com/jeremyash/icons/blob/main/red-fire-flame.png",
-               iconWidth = 24,
-                iconHeight = 24,
-                iconAnchorX = 12,
-                iconAnchorY = 12)) %>% 
+air_mon_leaflet <-
+  leaflet() %>%
+  addProviderTiles(providers$Stadia.OSMBright) %>%
 
-  
-  # icon legend
+  addMarkers(
+    data = burn_loc, lng = ~lon, lat = ~lat,
+    icon = list(
+      iconUrl = "https://github.com/jeremyash/icons/blob/main/red-fire-flame.png",
+      iconWidth = 24,
+      iconHeight = 24,
+      iconAnchorX = 12,
+      iconAnchorY = 12
+    )
+  ) %>%
+
   addControl(html = html_legend, position = "bottomleft") %>%
-  
-  # aqi legend
-  addLegend(colors = US_AQI$colors_EPA,
-            labels = US_AQI$names_eng,
-            opacity = 0.75,
-            title = "AQI",
-            position = "bottomleft") %>% 
-  
-  # set scale of map viewer
-  fitBounds(lng1 = burn_info$lon - 0.5,
-            lat1 = burn_info$lat - 0.5,
-            lng2 = burn_info$lon + 0.5,
-            lat2 = burn_info$lat + 0.5) %>% 
-  
-  # scale bar
-  addScaleBar(position = "bottomright") 
 
+  addLegend(
+    colors = US_AQI$colors_EPA,
+    labels = US_AQI$names_eng,
+    opacity = 0.75,
+    title = "AQI",
+    position = "bottomleft"
+  ) %>%
 
-# conditional add of AQI forecast 
-air_mon_leaflet <-  
-  if ( is.null(airnow_today) | is.null(airnow_tomorrow) ) {
+  fitBounds(
+    lng1 = burn_info$lon - 0.5,
+    lat1 = burn_info$lat - 0.5,
+    lng2 = burn_info$lon + 0.5,
+    lat2 = burn_info$lat + 0.5
+  ) %>%
+
+  addScaleBar(position = "bottomright")
+
+# conditional add of AQI forecast
+air_mon_leaflet <-
+  if (is.null(airnow_today) | is.null(airnow_tomorrow)) {
     air_mon_leaflet
-  } else{
-    air_mon_leaflet %>% 
-      # aqi today forecast
-      addPolygons(data = airnow_today,
-                  fillColor = ~aqi_color,
-                  fillOpacity = 0.75,
-                  color = ~aqi_color, 
-                  opacity = 0.75,
-                  group = "Forecast AQI Today") %>%
-      
-      # aqi tomorrow forecast
-      addPolygons(data = airnow_tomorrow,
-                  fillColor = ~aqi_color,
-                  fillOpacity = 0.75,
-                  color = ~aqi_color, 
-                  opacity = 0.75,
-                  group = "Forecast AQI Tomorrow") %>%
-      
-      # layers control
+  } else {
+    air_mon_leaflet %>%
+      addPolygons(
+        data = airnow_today,
+        fillColor = ~aqi_color,
+        fillOpacity = 0.75,
+        color = ~aqi_color,
+        opacity = 0.75,
+        group = "Forecast AQI Today"
+      ) %>%
+      addPolygons(
+        data = airnow_tomorrow,
+        fillColor = ~aqi_color,
+        fillOpacity = 0.75,
+        color = ~aqi_color,
+        opacity = 0.75,
+        group = "Forecast AQI Tomorrow"
+      ) %>%
       addLayersControl(
         overlayGroups = c("Forecast AQI Today", "Forecast AQI Tomorrow"),
-        options = layersControlOptions(collapsed = FALSE)) %>% 
-      hideGroup("Forecast AQI Today") %>% 
+        options = layersControlOptions(collapsed = FALSE)
+      ) %>%
+      hideGroup("Forecast AQI Today") %>%
       hideGroup("Forecast AQI Tomorrow")
   }
 
-# conditional add of temporary monitors   
+# conditional add of temporary monitors
 air_mon_leaflet <-
-  if ( dim(temp_mon_df)[1] > 0 ) {
-    air_mon_leaflet %>% 
+  if (!is.null(temp_mon_df) && nrow(temp_mon_df) > 0) {
+    air_mon_leaflet %>%
       addMarkers(
         lng = ~longitude,
         lat = ~latitude,
         icon = list(
           iconUrl = ~icons,
-          iconSize = c(15, 15)),
+          iconSize = c(15, 15)
+        ),
         popup = ~mon_v5_url,
-        data = temp_mon_df)
+        data = temp_mon_df
+      )
   } else {
     air_mon_leaflet
   }
 
 # conditional add of permanent monitors
-air_mon_leaflet <-  
-  if ( dim(perm_mon_df)[1] > 0 ) {
-    air_mon_leaflet %>%  
+air_mon_leaflet <-
+  if (!is.null(perm_mon_df) && nrow(perm_mon_df) > 0) {
+    air_mon_leaflet %>%
       addCircleMarkers(
         lng = ~longitude,
         lat = ~latitude,
         fillColor = ~aqi_col,
         fillOpacity = 1,
-        stroke = TRUE, 
+        stroke = TRUE,
         color = "black",
         popup = ~mon_v5_url,
         radius = 8,
         weight = 1,
-        data = perm_mon_df)
-  } else{
+        data = perm_mon_df
+      )
+  } else {
     air_mon_leaflet
   }
 
+# build AQI table HTML
+aqi_table <- tibble(
+  'Air Quality Index (AQI)' = c("Good", "Moderate", "USG", "Unhealthy", "Very Unhealthy", "Hazardous"),
+  'Actions to Protect Yourself' = AirMonitor::US_AQI$actions_eng
+) %>%
+  kable(
+    escape = FALSE,
+    linesep = "",
+    format = "html"
+  ) %>%
+  kable_styling(
+    full_width = TRUE,
+    position = "left",
+    bootstrap_options = "condensed"
+  ) %>%
+  column_spec(
+    1,
+    width = "28%",
+    bold = TRUE,
+    color = c("black", "black", "black", "white", "white", "white"),
+    background = US_AQI$colors_EPA,
+    extra_css = "padding: 4px 10px; line-height: 1.15; font-size: 14px;"
+  ) %>%
+  column_spec(
+    2,
+    width = "72%",
+    extra_css = "padding: 4px 10px; line-height: 1.15; font-size: 14px;"
+  ) %>%
+  row_spec(0, extra_css = "padding: 4px 10px; font-size: 14px;") %>%
+  row_spec(1:6, extra_css = "height: 28px;") %>%
+  as.character()
 
+# ---- MAP (remove bottom spacing) ----
+htmltools::div(
+  style = "margin-bottom:0;",
+  air_mon_leaflet
+)
 
-# aqi_table 
-aqi_kable <- tibble('Air Quality Index (AQI)' = c("Good", "Moderate", "USG", "Unhealthy", "Very Unhealthy", "Hazardous"),
-                    'Actions to Protect Yourself' = AirMonitor::US_AQI$actions_eng) %>%
-  mutate('Air Quality Index (AQI)' = cell_spec(c("Good", "Moderate", "USG", "Unhealthy", "Very Unhealthy", "Hazardous"), 
-                                               color = c("black", "black", "black", "white", "white", "white"), bold = T, format = "html", background = US_AQI$colors_EPA)) %>% 
-  kable(escape = FALSE, linesep = "", format = "html" ) %>%
-  kable_styling(full_width = F, position = "center")
-
- 
-# show leaflet map
-air_mon_leaflet 
- 
-# show aqi color scheme and explanations
-aqi_kable
-
-
+# ---- BOXED TABLE (tight to map) ----
+cat(
+  paste0(
+    "<div style='margin-top:8px; width:100%; max-width:100%; box-sizing:border-box; border:2px solid #cccccc; border-radius:6px; padding:12px 14px; background:#ffffff;'>",
+    aqi_table,
+    "<div style='margin-top:10px; font-size:14px; line-height:1.4;'>",
+    "<strong>Note:</strong> Generally, smoke sensitive people are kids and older adults along with those who have cardiovascular or respiratory conditions. For more smoke and health information: ",
+    "<a href='https://fire.airnow.gov/' target='_blank'>https://fire.airnow.gov/</a>",
+    "</div>",
+    "</div>"
+  )
+)
 ```
 
-**Note**: Generally, smoke sensitive people are kids and older adults along with those who have cardiovascular or respiratory conditions.
 
-For more smoke and health information: [https://airnow.gov/](https://airnow.gov/)
 
 
 ## Modeled Smoke Dispersion
