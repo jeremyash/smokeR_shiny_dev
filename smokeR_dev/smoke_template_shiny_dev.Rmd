@@ -151,12 +151,6 @@ burn_loc_sf <- st_as_sf(burn_loc,
                         coords = c("lon", "lat"),
                         crs = st_crs("EPSG:4326"))
 
-
-
-# update burn info with region
-burn_info <- burn_info %>% 
-  mutate(region = burn_region)
-
 # lat_long value
 lat_lon <- paste(burn_info$lat, burn_info$lon, sep = ", ")
 
@@ -365,15 +359,6 @@ forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI fo
                                                                       sep = "")} else{""}
 
 # superfog statement
-# superfog_sen <- if(params$SUPERFOG_SCREEN_SELECT == "Yes") {"*The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.*"} else{"*The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.*"}
-
-# superfog_sen <- ifelse(is.null(params$SUPERFOG_SCREEN_SELECT), 
-#                          NULL,
-#                        ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
-#                               "*The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.*",
-#                               "*The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.*"))
-
-
 superfog_sen <- ifelse(burn_info$region == "08",
                        ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
                               "**The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.**",
@@ -417,11 +402,6 @@ burn_icon <- tibble(x = burn_info$lon,
 ## CREATE MAP OF BURN AND NEARBY AQ MONITORS ---------------------------------
 
 # prep legend
-# html_legend <- "<img src='https://fire.airnow.gov/8047b300ec26700b8e475a895fbd50ba.png'style='width:15px;height:20px;'>Burn&nbsp;location<br/>
-# <img src='https://fire.airnow.gov/be7e1e18f22c71d4b09c333d7ac56460.png'style='width:15px;height:15px;'>Permanent&nbsp;monitor<br/>
-# <img src='https://fire.airnow.gov/07939407ecc29c4bde560ae7071031d4.png'style='width:15px;height:15px;'>Temporary&nbsp;monitor<br/>"
-# 
-
 html_legend <- "<img src='https://github.com/jeremyash/icons/blob/main/red-fire-flame.png?raw=true'style='width:15px;height:15px;'>&nbsp;Burn&nbsp;location<br/>
 <img src='https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>
 <img src='https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true'style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
@@ -456,8 +436,7 @@ air_mon_leaflet <-
   # fire location
   addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
              icon = list(
-               # iconUrl = "https://github.com/jeremyash/icons/blob/main/redFlame.png?raw=true",
-              iconUrl = "red-fire-flame.png",
+              iconUrl = "https://github.com/jeremyash/icons/blob/main/red-fire-flame.png",
                iconWidth = 24,
                 iconHeight = 24,
                 iconAnchorX = 12,
@@ -580,13 +559,10 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps b
 
 ```{r leaflet_map_data_mgt, include = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
 
-## READ IN POP/SVI DATA ----------------------------------------------
+## READ IN POP DATA ----------------------------------------------
 
 # census data
 pop <- readRDS("population_aggregate_factor.rds") 
-
-# SVI data
-# svi <- readRDS("svi.rds") 
 
 
 ## DOWNLOAD DATA FROM BSKY DISPERSION RESULTS ----------------------------------------------
@@ -747,15 +723,10 @@ crs(day_one_avg_ras) <- burn_crs$proj4string
 
 
 
-## PREP POPULATION AND SVI DATA ----------------------------------------------
+## PREP POPULATION DATA ----------------------------------------------
 
 # create buffer around ignition to clip SVI/pop rasters
 burn_buf <- st_buffer(burn_loc_sf, dist = 500000)
-
-#SVI with buffer
-# svi_cr <- crop(svi, burn_buf, snap="out")                    
-# svi_fr <- rasterize(burn_buf, svi_cr) 
-# svi_buf <- mask(x=svi_cr, mask=svi_fr)
 
 #pop with buffer
 pop_cr <- crop(pop, burn_buf, snap="out")                    
@@ -787,11 +758,6 @@ avg_pal_fun <- colorFactor(palette = avg_col_ramp_hex,
                        levels = levels(day_one_avg_ras)[[1]][1]$ID,
                        na.color = "transparent")
 
-# create color palette function for SVI
-# svi_pal_fun <- colorBin(palette = "Purples",
-#   bins = c(seq(0, 1, 0.1)),
-#   na.color = "transparent")
-
 # create color palette function for pop
 pop_pal_fun <- colorFactor(palette = "magma",
                     levels = levels(pop_buf)[[1]][1]$ID,
@@ -809,7 +775,6 @@ avg_leaflet <- leaflet() %>%
   
   # add mappanes to always keep circles, then smoke on top
   addMapPane("pop_map", zIndex = 450) %>%
-  # # addMapPane("svi_map", zIndex = 410) %>%
   addMapPane("smoke_map", zIndex = 460) %>%
   addMapPane("cir_map", zIndex = 470) %>%
   
