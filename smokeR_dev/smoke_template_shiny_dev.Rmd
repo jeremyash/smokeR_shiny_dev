@@ -435,12 +435,12 @@ temp_mon_df$icons <- if (!(is.null(temp_mon_df))) {
 # generate base leaflet map
 air_mon_leaflet <-
   leaflet() %>%
-  addProviderTiles(providers$Stadia.OSMBright) %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik) %>%
 
   addMarkers(
     data = burn_loc, lng = ~lon, lat = ~lat,
     icon = list(
-      iconUrl = "https://github.com/jeremyash/icons/blob/main/red-fire-flame.png",
+      iconUrl = "red-fire-flame.png",
       iconWidth = 24,
       iconHeight = 24,
       iconAnchorX = 12,
@@ -803,7 +803,7 @@ pop_pal_fun <- colorFactor(palette = "magma",
 
 # generate leaflet map for average smoke
 avg_leaflet <- leaflet() %>% 
-  addProviderTiles(providers$Stadia.OSMBright,
+  addProviderTiles(providers$OpenStreetMap.Mapnik,
                    group = "Street") %>% 
 
   addProviderTiles("Esri.WorldImagery",
@@ -916,7 +916,7 @@ avg_leaflet <- leaflet() %>%
 # generate leaflet map for visual range
 vis_leaflet <- leaflet() %>% 
   
-addProviderTiles(providers$Stadia.OSMBright) %>% 
+addProviderTiles(providers$OpenStreetMap.Mapnik) %>% 
   
   # plot visual range raster
   addRasterImage(day_one_vis_ras,
@@ -976,36 +976,16 @@ vis_leaflet
 
 ```{r firepoker_link, echo = FALSE, include = FALSE }
 
-## Generate firepoker link
-
-# read in dispersion breakpoints and id the state where burn is happening
-disp_brkpts_df <- read.csv("disp_breakpoints.csv")
-states <- st_read("states")
-state_sf <- st_transform(states, crs = st_crs(burn_loc_sf))
-burn_state <- as.character(states$STATE_ABBR[st_intersects(burn_loc_sf, state_sf)[[1]]])
-
-
-disp_brkpts <- disp_brkpts_df %>% 
-  filter(state == burn_state) 
-
-
-  # create firepoker link
-  fp_url <- paste("https://www.weather.gov/dlh/fwd?lat=",
+## Generate Fire Weather Dashboard link
+fwd_url <- paste0("https://www.weather.gov/dlh/fwd?lat=",
                   round(burn_loc$lat, 3),
                   "&lon=",
                   round(burn_loc$lon, 3),
-                  "&clat=38.967&clon=-97.267&zoom=7.000&basemap=stamenterrain&bbox=[-16540299.098,2518065.675,-5115162.882,6915872.719]&layers=USStates|ForecastDot|Domain|SurfaceFronts|Radar|&fwf=F&dispersion=",
-                  paste(0, 
-                        disp_brkpts[2], 
-                        disp_brkpts[3],
-                        disp_brkpts[4],
-                        disp_brkpts[5],
-                        sep = ","),
-                  "&ndfd=WindGust",
-                  sep = "")
+                  "&clat=38.967&clon=-97.267&zoom=7.000&basemap=stamenterrain&bbox=[-16540299.098,2518065.675,-5115162.882,6915872.719]&layers=USStates|ForecastDot|Domain|SurfaceFronts|Radar|&fwf=F&dispersion=0,13,30,60,250&ndfd=windgust&nohelp=t&vrunits=ktft")
+
 ```
 
-The predicted weather data for this area, including fire behavior and smoke parameters can be found on the [Fire Weather Dashboard](`r fp_url`). `r if(!(is.null(params$SUPERFOG_SCREEN_SELECT))){superfog_sen}`
+The predicted weather data for this area, including fire behavior and smoke parameters can be found on the [Fire Weather Dashboard](`r fwd_url`). `r if(!(is.null(params$SUPERFOG_SCREEN_SELECT))){superfog_sen}`
 
 
 
