@@ -578,7 +578,7 @@ cat(
   paste0(
     "<div style='margin-top:8px; width:100%; max-width:100%; box-sizing:border-box; border:2px solid #cccccc; border-radius:6px; padding:12px 14px; background:#ffffff;'>",
     aqi_table,
-    "<div style='margin-top:10px; font-size:14px; line-height:1.4;'>",
+    "<div style='margin-top:4px; font-size:14px; line-height:1.3;'>",
     "<strong>Note:</strong> Generally, smoke sensitive people are kids and older adults along with those who have cardiovascular or respiratory conditions. For more smoke and health information: ",
     "<a href='https://fire.airnow.gov/' target='_blank'>https://fire.airnow.gov/</a>",
     "</div>",
