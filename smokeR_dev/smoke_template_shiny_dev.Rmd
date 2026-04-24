@@ -362,8 +362,8 @@ forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI fo
 # superfog statement
 superfog_sen <- ifelse(burn_info$region == "08",
                        ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
-                              "**The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.**",
-                              "**The spot weather forecast indicates there is not potential for superfog formation in the overnight hours.**"),
+                              "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.",
+                              "The spot weather forecast indicates there is not potential for superfog formation in the overnight hours."),
                        "")
 
 
@@ -389,7 +389,7 @@ burn_kable
 
 ## Recent Air Quality in Area 
 
-Shown below is the recently measured air quality index (AQI) in the area. The map shows the location of the burn and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days. Lastly, the AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. Additional information for your area can be found on the [Fire and Smoke Map](https://fire.airnow.gov/) and [EPA AirNow Map](https://gispub.epa.gov/airnow/).  `r if(!(is.null(params$FORECAST_AQI_SELECT))){forecast_aqi_sen}`
+Shown below is the recently measured air quality index (AQI) in the area. The map shows the location of the burn and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days. Lastly, the AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. `r if(!(is.null(params$FORECAST_AQI_SELECT))){forecast_aqi_sen}`
 
 ```{r burn_map_aqi, out.width="100%", include=TRUE, echo=FALSE, message=FALSE, results='asis', warning=FALSE}
 ## CREATE MAP OF BURN AND NEARBY AQ MONITORS ----------------------------------------------
@@ -908,10 +908,12 @@ vis_leaflet
 ``` 
 
 
-## Superfog Screening
-
-`r if (!(is.null(params$SUPERFOG_SCREEN_SELECT))) { superfog_sen }`
-
+```{r superfog_section, results='asis', echo=FALSE}
+if (params$REGION == "08") {
+  cat("## Superfog Screening\n\n")
+  cat(superfog_sen)
+}
+```
 
 
 ## Meteorological and Air Quality Conditions  
