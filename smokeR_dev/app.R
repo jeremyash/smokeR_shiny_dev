@@ -43,7 +43,6 @@ ui <- fluidPage(
         textInput("AUTHOR", "Your name"),
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
-        radioButtons("DROP_LOW_AVG", "Drop lowest PM category (1-9 ug m-3) from the map?", c("Yes", "No")),
      downloadButton("report", "Download Smoke Report"),
      downloadButton("kmz", "Download Google Earth File")
     ),
@@ -147,15 +146,6 @@ server <- function(input, output) {
     }
   })
   
-  # Region 09 only: day before or of burn
-  output$DAY_BEFORE_OF <- renderUI({
-    if(input$REGION == "09"){
-      selectInput("DAY_BEFORE_OF_SELECT", "Day before or of burn?", choices = c("Day before",
-                                                                                             "Day of"))
-    } else {
-      NULL
-    }
-  })
   
   
   ### download handler for report
