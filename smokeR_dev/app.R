@@ -4,7 +4,6 @@ require(rmarkdown)
 require(knitr)
 require(terra)
 require(viridis)
-require(shinybusy)
 require(RCurl)
 require(rjson)
 require(lubridate)
@@ -22,12 +21,11 @@ ui <- fluidPage(
   sidebarLayout(
     ### sidebar
     sidebarPanel(
-      add_busy_spinner(spin = "fading-circle"),
+
       # choices = c("01", "02", "03", "04", "05", "06", "08", "09")
       selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
       uiOutput("FORECAST_AQI"),
       uiOutput("SUPERFOG_SCREEN"),
-      uiOutput("DAY_BEFORE_OF"),
       # selectizeInput(
       #   "FOREST",
       #   'Choose your USFS unit',
@@ -40,6 +38,11 @@ ui <- fluidPage(
       uiOutput("FOREST"),
         textInput("BURN_NAME", "Name of burn unit"),
         textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
+      selectInput(
+        "HOURLY_MAP_SELECT",
+        "Include hourly smoke map?",
+        choices = c("No", "Yes")
+      ),
         textInput("AUTHOR", "Your name"),
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
@@ -90,7 +93,7 @@ server <- function(input, output) {
     req(input$RUN_ID) # require it not to be empty
     as.character(input$RUN_ID)
   })
-
+  
   # subset Forest names based on Region
   output$FOREST <- renderUI({
     selectInput("FOREST", "Forest:", choices = nfs[nfs$region==input$REGION,"forests"])
@@ -113,14 +116,27 @@ server <- function(input, output) {
   })
   
   # download file names
-  forest_burn <- reactive({str_replace_all(paste(output$selected_unit, output$selected_burn), " ", "_")})
+  forest_burn <- reactive({
+    req(input$BURN_NAME)
+    paste(input$BURN_NAME) %>%
+      str_replace_all("[[:punct:]]", "") %>%
+      str_squish() %>%
+      str_replace_all(" ", "_")
+  })
+  
   yearmonday <- str_replace_all(Sys.Date(), "-", "")
-  smoke_report_title <- reactive({paste(yearmonday,
-                              "_",
-                              forest_burn, ".html", sep = "")})
-  kmz_file <- reactive({paste(yearmonday,
-                    "_",
-                    forest_burn, ".kmz", sep = "")})
+  
+  smoke_report_title <- reactive({
+    paste(yearmonday,
+          "_",
+          forest_burn(), "_smoke_report.html", sep = "")
+  })
+  
+  kmz_file <- reactive({
+    paste(yearmonday,
+          "_",
+          forest_burn(), "_bsky_dispersion.kmz", sep = "")
+  })
   
   # REGION 08 only AQI and superfog inputs
   output$FORECAST_AQI <- renderUI({
@@ -151,47 +167,58 @@ server <- function(input, output) {
   ### download handler for report
   output$report <- downloadHandler(
     # set up file names for downloads
-    filename = "smoke_report.html",
+    filename = function() {
+      smoke_report_title()
+    },
     content = function(file) {
-      # Copy the report file to a temporary directory before processing it, in
-      # case we don't have write permissions to the current working dir (which
-      # can happen when deployed).
-      # tempReport <- file.path(tempdir(), "smoke_template_shiny.Rmd")
-      # file.copy("smoke_template_shiny.Rmd", tempReport, overwrite = TRUE)
       
-      # Set up parameters to pass to Rmd document
-      params_ls <- list(BURN_NAME = input$BURN_NAME,
-                     FOREST = input$FOREST,
-                     REGION = input$REGION,
-                     AUTHOR = input$AUTHOR,
-                     EMAIL = input$EMAIL,
-                     PHONE = input$PHONE,
-                     RUN_ID = input$RUN_ID,
-                     DROP_LOW_AVG = input$DROP_LOW_AVG,
-                     FORECAST_AQI_SELECT = if(input$REGION == "08") {input$FORECAST_AQI_SELECT},
-                     SUPERFOG_SCREEN_SELECT = if(input$REGION == "08") {input$SUPERFOG_SCREEN_SELECT},
-                     DAY_BEFORE_OF_SELECT = if(input$REGION == "09") {input$DAY_BEFORE_OF_SELECT})
-      
-      # Knit the document, passing in the `params` list, and eval it in a
-      # child of the global environment (this isolates the code in the document
-      # from the code in this app).
-      # rmarkdown::render(tempReport, 
-      #                   output_file = file,
-      #                   params = params_ls
-      #                   # envir = new.env(parent = globalenv())
-      
-      rmarkdown::render("smoke_template_shiny.Rmd", 
-                        output_file = file,
-                        params = params_ls
-                        # envir = new.env(parent = globalenv())
-      )
+      withProgress(message = "Generating smoke report...", value = 0, {
+        
+        incProgress(0.15, detail = "Preparing report parameters")
+        
+        params_ls <- list(
+          BURN_NAME = input$BURN_NAME,
+          FOREST = input$FOREST,
+          REGION = input$REGION,
+          AUTHOR = input$AUTHOR,
+          EMAIL = input$EMAIL,
+          PHONE = input$PHONE,
+          RUN_ID = input$RUN_ID,
+          
+          FORECAST_AQI_SELECT = if (input$REGION == "08") {
+            input$FORECAST_AQI_SELECT
+          } else {
+            NULL
+          },
+          
+          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") {
+            input$SUPERFOG_SCREEN_SELECT
+          } else {
+            NULL
+          },
+          
+          HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT
+        )
+        
+        incProgress(0.35, detail = "Rendering R Markdown report")
+        
+        rmarkdown::render(
+          "smoke_template_shiny_dev.Rmd",
+          output_file = file,
+          params = params_ls
+        )
+        
+        incProgress(0.50, detail = "Finalizing download")
+      })
     }
   )
   
   ### download handler for kmz
   output$kmz <- downloadHandler(
     # set up file names for downloads
-    filename = "bsky_dispersion.kmz",
+    filename = function() {
+      kmz_file()
+    },
     content = function(file) {
       # general dispersion results link
       bsky_link <- paste("https://tools.airfire.org/playground/v3.5/dispersionresults.php?scenario_id=",
