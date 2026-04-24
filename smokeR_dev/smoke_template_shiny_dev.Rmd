@@ -42,6 +42,8 @@ library(egg)
 library(rvest)
 library(googlesheets4)
 library(lutz)
+library(base64enc)
+library(htmlwidgets)
 
 # Mazama Science packages
 library(beakr)
@@ -639,53 +641,70 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps s
 pop <- readRDS("population_aggregate_factor.rds") 
 
 
-## DOWNLOAD DATA FROM BSKY DISPERSION RESULTS ----------------------------------------------
+## DOWNLOAD PNG MAP IMAGES AND GRID INFO ----------------------------------------------
 
 # create outlook directory
-dir.create("temp")
+dir.create("temp", showWarnings = FALSE)
 outlook_path <- "temp"
-  
-# smoke dispersion kmz link
-smoke_disp_link <- paste0(results_output_link,
-                         "/output/smoke_dispersion.kmz")
 
-# download daily average geotif
-curl_download(paste0(results_output_link,
-               "/output/geotiff-graphics-pm25/100m/daily_average/UTC",
-               gsub(":", "", burn_info$utc_offset),
-              "/GreyColorBar/pm25_100m_daily_average_UTC",
-              gsub(":", "", burn_info$utc_offset),
-              "_GreyColorBar_",
-              burn_info$date_time,
-              "-raw-pm25.tif"),
-              destfile = paste0(outlook_path,
-                                "/daily_avg.tif"))
+# download daily average PM2.5 PNG
+curl_download(
+  paste0(
+    results_output_link,
+    "/output/images-pm25/100m/daily_average/UTC",
+    gsub(":", "", burn_info$utc_offset),
+    "/GreyColorBar/pm25_100m_daily_average_UTC",
+    gsub(":", "", burn_info$utc_offset),
+    "_GreyColorBar_",
+    burn_info$date_time,
+    ".png"
+  ),
+  destfile = paste0(outlook_path, "/daily_avg.png")
+)
 
-# download visual range geotif
-curl_download(paste0(results_output_link,
-               "/output/geotiff-graphics-visualrange/100m/daily_minimum/UTC",
-               gsub(":", "", burn_info$utc_offset),
-              "/RainbowColorBarVisualRange/visualrange_100m_daily_minimum_UTC",
-              gsub(":", "", burn_info$utc_offset),
-              "_RainbowColorBarVisualRange_",
-              burn_info$date_time,
-              "-raw-pm25.tif"),
-              destfile = paste0(outlook_path,
-                                "/daily_vis_range.tif"))
+# download daily minimum visual range PNG
+curl_download(
+  paste0(
+    results_output_link,
+    "/output/images-visualrange/100m/daily_minimum/UTC",
+    gsub(":", "", burn_info$utc_offset),
+    "/RainbowColorBarVisualRange/visualrange_100m_daily_minimum_UTC",
+    gsub(":", "", burn_info$utc_offset),
+    "_RainbowColorBarVisualRange_",
+    burn_info$date_time,
+    ".png"
+  ),
+  destfile = paste0(outlook_path, "/daily_vis_range.png")
+)
 
- # download hourly pm2.5 dispersion geotifs
-
-
-## READ IN SMOKE DISPERSION RESULTS AND RECODE FOR PLOTTING ----------------------------------------------
-
-# read GeoTif files
-day_one_avg <- raster::raster(paste0(outlook_path,
-                                     "/daily_avg.tif"))
-
-day_one_vis <- raster::raster(paste0(outlook_path,
-                                     "/daily_vis_range.tif"))
+# download grid info
+curl_download(
+  paste0(results_output_link, "/output/grid_info.json"),
+  destfile = paste0(outlook_path, "/grid_info.json")
+)
 
 
+## READ PNG FILES ---------------------------------------------------------
+
+grid_info <- jsonlite::fromJSON(paste0(outlook_path, "/grid_info.json"))
+
+# bbox order: xmin, ymin, xmax, ymax
+img_bounds <- list(
+  xmin = grid_info$bbox[1],
+  ymin = grid_info$bbox[2],
+  xmax = grid_info$bbox[3],
+  ymax = grid_info$bbox[4]
+)
+
+avg_png_uri <- base64enc::dataURI(
+  file = paste0(outlook_path, "/daily_avg.png"),
+  mime = "image/png"
+)
+
+vis_png_uri <- base64enc::dataURI(
+  file = paste0(outlook_path, "/daily_vis_range.png"),
+  mime = "image/png"
+)
 
 ## PREP POPULATION DATA ----------------------------------------------
 
@@ -718,14 +737,6 @@ pm25_cols <- c(
 # bin edges
 pm25_bins <- c(1, 9, 35, 55, 150, 250, 350, 500, Inf)
 
-# pm palette
-avg_pal <- colorBin(
-  palette = pm25_cols,
-  domain  = values(day_one_avg),
-  bins    = pm25_bins,
-  na.color = "#00000000",
-  right = FALSE
-)
 
 # Colors for Visual Range ----------------------------------------------
 
@@ -765,13 +776,6 @@ vis_labels <- c(
   ">50"
 )
 
-vis_pal <- colorBin(
-  palette = vis_cols,
-  domain = values(day_one_vis),
-  bins = vis_bins,
-  na.color = "#00000000",
-  right = FALSE
-)
 
 # Colors for Population ----------------------------------------------
 
@@ -797,20 +801,11 @@ avg_leaflet <- leaflet() %>%
   addMapPane("smoke_map", zIndex = 460) %>%
   addMapPane("cir_map", zIndex = 470) %>%
   
-  #daily average smoke conditions
-  addRasterImage(day_one_avg,
-                colors = avg_pal,
-                opacity = 0.75,
-                group = "Smoke",
-           options=gridOptions(pane="smoke_map")) %>%
-  addLegend(
-    pal = avg_pal,
-    values = values(day_one_avg),
-    title = expression("PM"[2.5]),
-    opacity = 0.75,
-    labFormat = function(type, cuts, p) {
-      c("1-9", "9-35", "35-55", "55-150", "150-250", "250-350", "350-500", ">500")
-    }
+ addLegend(
+    colors = pm25_cols,
+    labels = c("1-9", "9-35", "35-55", "55-150", "150-250", "250-350", "350-500", ">500"),
+    title = expression("PM"[2.5] ~ "(" * mu * "g/m"^3 * ")"),
+    opacity = 0.75
   ) %>%
 
   # fire location
@@ -876,7 +871,31 @@ avg_leaflet <- leaflet() %>%
                                    collapsed = FALSE)) %>%
   hideGroup("Population") %>%
   hideGroup("Distance from Fire") 
-# hideGroup("Social Vulnerability Index")
+
+avg_leaflet <- avg_leaflet %>%
+  htmlwidgets::onRender(
+    "
+    function(el, x, data) {
+      var map = this;
+      var bounds = [
+        [data.ymin, data.xmin],
+        [data.ymax, data.xmax]
+      ];
+
+      L.imageOverlay(data.url, bounds, {
+        opacity: 0.75,
+        pane: 'smoke_map'
+      }).addTo(map);
+    }
+    ",
+    data = list(
+      url = avg_png_uri,
+      xmin = img_bounds$xmin,
+      ymin = img_bounds$ymin,
+      xmax = img_bounds$xmax,
+      ymax = img_bounds$ymax
+    )
+  )
 
 
 
@@ -887,22 +906,12 @@ vis_leaflet <- leaflet() %>%
   
 addProviderTiles(providers$OpenStreetMap.Mapnik) %>% 
   
-  # plot visual range raster
-  addRasterImage(
-    day_one_vis,
-    colors = vis_pal,
-    opacity = 0.75,
-    project = FALSE
-  ) %>%
   addLegend(
     position = "topright",
-    pal = vis_pal,
-    values = values(day_one_vis),
+    colors = vis_cols,
+    labels = vis_labels,
     title = "Visual Range (miles)",
-    opacity = 0.75,
-    labFormat = function(type, cuts, p) {
-      vis_labels
-    }
+    opacity = 0.75
   ) %>% 
   
   ## fire location
@@ -920,6 +929,30 @@ addProviderTiles(providers$OpenStreetMap.Mapnik) %>%
             lng2 = burn_icon$x + 0.5,
             lat2 = burn_icon$y + 0.5) %>% 
   addScaleBar(position = "bottomright")
+
+vis_leaflet <- vis_leaflet %>%
+  htmlwidgets::onRender(
+    "
+    function(el, x, data) {
+      var map = this;
+      var bounds = [
+        [data.ymin, data.xmin],
+        [data.ymax, data.xmax]
+      ];
+
+      L.imageOverlay(data.url, bounds, {
+        opacity: 0.75
+      }).addTo(map);
+    }
+    ",
+    data = list(
+      url = vis_png_uri,
+      xmin = img_bounds$xmin,
+      ymin = img_bounds$ymin,
+      xmax = img_bounds$xmax,
+      ymax = img_bounds$ymax
+    )
+  )
 
 
 # remove smoke dispersion files from directory
