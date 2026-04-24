@@ -1,12 +1,12 @@
 ---
 title: "Smoke Report for `r params$BURN_NAME` Prescribed Fire, `r params$FOREST`"
-# date: "Issued at `r Sys.time()`"
 output:
   html_document: 
     toc: TRUE
     toc_depth: 2
     toc_float: TRUE
     css: report_styles.css
+    highlight: null
 geometry: margin=0.25in
 params: 
   BURN_NAME: "test"
@@ -16,37 +16,38 @@ params:
   EMAIL: "test"
   PHONE: "test"
   RUN_ID: "169c2fe914afb1"
-  DROP_LOW_AVG: "No"
   FORECAST_AQI_SELECT: "Moderate"
   SUPERFOG_SCREEN_SELECT: "Yes"
-  DAY_BEFORE_OF_SELECT: "Day before"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-  library(tidyverse)            # tidyverse
-  library(ggrepel)              # label arrangement for ggplot
-  library(png)                  # reading in PNGs from BSky
-  library(curl)                 # downloading data from BSky dispersion results
-  library(RCurl)                 # downloading data from BSky dispersion results
-  library(rjson)                # reading JSON data
-  library(lubridate)            # date manipulation
-  library(terra)                # raster manipulation       
-  library(sf)                   # spatial data
-  library(kableExtra)           # styling of kable objects
-  library(leaflet)              # interactive mapping
-  library(egg)
-  library(rvest)                # html parsing
-  library(googlesheets4)        # writing logs to google sheets
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
 
+library(tidyverse)
+library(ggrepel)
+library(png)
+library(curl)
+library(RCurl)
+library(rjson)
+library(lubridate)
+library(terra)
+library(sf)
+library(kableExtra)
+library(leaflet)
+library(egg)
+library(rvest)
+library(googlesheets4)
+library(lutz)
 
-  # Mazama Science packages
-  library(beakr)                # web service framework
-  library(MazamaCoreUtils)      # cache management and more
-  library(AirMonitor)           # air quality data
-
+# Mazama Science packages
+library(beakr)
+library(MazamaCoreUtils)
+library(AirMonitor)
 ```
-
 
 ```{r burn_info, include = FALSE}
 ##***************************************
@@ -127,6 +128,22 @@ basic_burn_info <- read.csv(paste(results_output_link, "/output/data/fire_locati
   mutate(date = as_date(ymd(date_time)),
          consumption_acre = consumption_total/acres)
 
+# generated report timestamp in burn local timezone
+burn_tz <- lutz::tz_lookup_coords(
+  lat = basic_burn_info$lat[1],
+  lon = basic_burn_info$lon[1],
+  method = "fast"
+)
+
+generated_at <- lubridate::with_tz(Sys.time(), tzone = burn_tz)
+
+generated_at_sen <- paste0(
+  "Issued at ",
+  format(generated_at, "%H:%M %B %d, %Y"),
+  " ",
+  format(generated_at, "%Z")
+)
+
 # get ignition time
 timing_info <- read.csv(paste(results_output_link, "/csvs/fire_emissions.csv", sep = "")) %>% 
   select(date_time, flame_profile) %>% 
@@ -172,7 +189,7 @@ burn_kable <- tibble(vars = c("Date", "Coordinates", "Acreage", "Flaming Start",
   column_spec(1, bold = T)
 
 
-## GENERTE DATA FOR RECENT AIR QUALITY ----------------------------------------------
+## GENERATE DATA FOR RECENT AIR QUALITY ----------------------------------------------
 # start and end dates for pulling air quality monitor data
 startdate <- burn_info$date - lubridate::ddays(3)
 enddate <- burn_info$date - lubridate::ddays(1)
@@ -310,7 +327,7 @@ tryCatch(
   expr = {
     # NOTE:  This ran into problems in the docker container:  ! object 'Description' not found
     sf <- 
-      sf::st_read("https:/s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/today/forecast_tomorrow_usa.kml", quiet = TRUE) %>%
+      sf::st_read("https://s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/today/forecast_tomorrow_usa.kml", quiet = TRUE) %>%
       sf::st_zm() %>%
       rowwise()
     
@@ -370,28 +387,50 @@ superfog_sen <- ifelse(burn_info$region == "08",
 
 ```
 
-<br>
+<div class="report-issued">`r generated_at_sen`</div>
+
+## Report Summary
+
+```{=html}
 <div class="fire_info_wrapper">
   <div>
-  <p class="paragraph">
-This report documents the recent air quality, smoke analysis and weather forecast for the `r params$BURN_NAME` prescribed fire on the `r params$FOREST`. Dispersion modeling is based on parameters submitted by the requesting unit. <br><br> Additional smoke modeling output can be found at the [BlueSky Playground Dispersion Results](`r bsky_link`). <br><br> **For more information:** <br>`r contact_info`
-  </p>
+    <p class="paragraph">
+```
+
+This report documents the recent air quality, smoke analysis and weather forecast for the `r params$BURN_NAME` prescribed fire on the `r params$FOREST`. Dispersion modeling is based on parameters submitted by the requesting unit.
+
+Additional smoke modeling output can be found at the <a href="`r bsky_link`" target="_blank">BlueSky Playground Dispersion Results</a>.
+
+<strong>For more information:</strong>
+`r contact_info`
+
+```{=html}
+    </p>
   </div>
+
+  <div></div>
+
   <div>
-  </div>
-  <div>
-  
-```{r fire_info_tbl, fig.height = 6, fig.width = 6, echo = FALSE, warning = FALSE}
+```
+
+```{r fire_info_tbl, echo=FALSE, warning=FALSE}
 burn_kable
 ```
+
+```{=html}
   </div>
 </div>
+```
 
-## Recent Air Quality in Area 
 
-Shown below is the recently measured air quality index (AQI) in the area. The map shows the location of the burn and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days. Lastly, the AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. `r if(!(is.null(params$FORECAST_AQI_SELECT))){forecast_aqi_sen}`
+## Recent Air Quality
 
-```{r burn_map_aqi, out.width="100%", include=TRUE, echo=FALSE, message=FALSE, results='asis', warning=FALSE}
+Shown below is the recently measured air quality index (AQI) in the area. The map shows the burn location and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days.
+
+The AQI forecasts for today and tomorrow can be turned on by selecting the layer in the upper right of the map. `r if (!(is.null(params$FORECAST_AQI_SELECT))) forecast_aqi_sen`
+
+
+```{r burn_map_aqi, out.width="100%", include=TRUE, results='asis'}
 ## CREATE MAP OF BURN AND NEARBY AQ MONITORS ----------------------------------------------
 
 # read in burn icon for mapping
@@ -587,14 +626,12 @@ cat(
 )
 ```
 
-
-
-
 ## Modeled Smoke Dispersion
-Below are the smoke modeling outputs for the day of the planned burn. The maps below show the __daily average concentrations__ (top panel) and __maximum hourly impact to visual range__ (bottom panel) for `r burn_info$date`. Zoom in/out on each of the interactive maps to view particular features.
+
+Below are the smoke modeling outputs for the day of the planned burn. The maps show the **daily average concentrations** and **maximum hourly impact to visual range** for `r burn_info$date`. Zoom in or out on each interactive map to view specific features.
 
 
-```{r leaflet_map_data_mgt, include = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
+```{r leaflet_map_data_mgt, include=FALSE}
 
 ## READ IN POP DATA ----------------------------------------------
 
@@ -730,7 +767,7 @@ vis_labels <- c(
 
 vis_pal <- colorBin(
   palette = vis_cols,
-  domain = terra::values(day_one_vis),
+  domain = values(day_one_vis),
   bins = vis_bins,
   na.color = "#00000000",
   right = FALSE
@@ -860,7 +897,7 @@ addProviderTiles(providers$OpenStreetMap.Mapnik) %>%
   addLegend(
     position = "topright",
     pal = vis_pal,
-    values = terra::values(day_one_vis),
+    values = values(day_one_vis),
     title = "Visual Range (miles)",
     opacity = 0.75,
     labFormat = function(type, cuts, p) {
@@ -890,35 +927,38 @@ unlink(outlook_path,
        recursive = TRUE)
 ```
 
-__Average Daily Smoke Conditions on `r burn_info$date`:__ The average daily smoke conditions are helpful for concerns related to public health. Select 'Population' to see the number of people in each census tract surrounding the planned burn. 
-```{r avg_leaflet_map_show, out.width = "100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+### Average Daily Smoke Conditions
 
-# show leaflet map
+The average daily smoke conditions are helpful for concerns related to public health. Select **Population** to see the number of people in each census tract surrounding the planned burn.
+
+```{r avg_leaflet_map_show, out.width="100%", include=TRUE}
 avg_leaflet
+```
 
 
-``` 
+### Maximum Hourly Impact to Visual Range
 
-__Maximum Hourly Impact to Visual Range on `r burn_info$date`:__ The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other areas.
-```{r vis_leaflet_map_show, out.width = "100%", include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other sensitive areas.
 
-# show leaflet map
+```{r vis_leaflet_map_show, out.width="100%", include=TRUE}
 vis_leaflet
+```
 
-``` 
 
-
-```{r superfog_section, results='asis', echo=FALSE}
+```{r superfog_section, results='asis'}
 if (params$REGION == "08") {
   cat("## Superfog Screening\n\n")
-  cat(superfog_sen)
+  cat(superfog_sen, "\n")
 }
 ```
 
 
-## Meteorological and Air Quality Conditions  
+## Meteorological and Air Quality Conditions
 
-```{r firepoker_link, echo = FALSE, include = FALSE }
+The Fire Weather Dashboard link below shows predicted fire weather for the area. The Fire and Smoke Map shows air quality conditions and is a good resource for monitoring smoke impacts throughout the day.
+
+
+```{r firepoker_link, include=FALSE}
 
 ## Generate Fire Weather Dashboard link
 fwd_url <- paste0("https://www.weather.gov/dlh/fwd?lat=",
@@ -934,8 +974,6 @@ fasm_url <- paste0("https://fire.airnow.gov/#6.91/",
                   round(burn_loc$lon, 3))
 
 ```
-
-The Fire Weather Dashboard link below shows predicted fire weather the area. The Fire and Smoke Map shows air quality conditions and is a good resource for monitoring smoke impacts throughout the day.  
 
 ```{=html}
 <style>
@@ -953,7 +991,7 @@ The Fire Weather Dashboard link below shows predicted fire weather the area. The
   overflow: hidden;
   border-radius: 8px;
   border: 1px solid #cccccc;
-  background: #000;
+  background: #000000;
 }
 
 .link-card img {
@@ -972,8 +1010,8 @@ The Fire Weather Dashboard link below shows predicted fire weather the area. The
   color: white !important;
   font-size: 26px;
   font-weight: 700;
-  text-decoration: none;
   text-align: center;
+  text-decoration: none;
   padding: 14px;
 }
 
@@ -991,26 +1029,29 @@ The Fire Weather Dashboard link below shows predicted fire weather the area. The
   }
 }
 </style>
-
-<div class="link-card-wrap">
-
-   <div class="link-card">
-    <img src="fwd.png" alt="Fire Weather Dashboard">
-    <a href="`r fwd_url`" target="_blank">
-      Fire Weather Dashboard
-    </a>
-  </div>
-
-  <div class="link-card">
-    <img src="fasm.png" alt="Fire and Smoke Map">
-    <a href="`r fasm_url`" target="_blank">
-      Fire and Smoke Map
-    </a>
-  </div>
-
-</div>
 ```
-  
+
+```{r weather_link_cards, results='asis'}
+cat(
+  paste0(
+    '<div class="link-card-wrap">',
+
+      '<div class="link-card">',
+        '<img src="fwd.png" alt="Fire Weather Dashboard">',
+        '<a href="', fwd_url, '" target="_blank">Fire Weather Dashboard</a>',
+      '</div>',
+
+      '<div class="link-card">',
+        '<img src="fasm.png" alt="Fire and Smoke Map">',
+        '<a href="', fasm_url, '" target="_blank">Fire and Smoke Map</a>',
+      '</div>',
+
+    '</div>'
+  )
+)
+```
+
+
 
 ```{r smoke_report_logs, include = FALSE, echo = FALSE, message = FALSE}
 
@@ -1066,8 +1107,3 @@ The Fire Weather Dashboard link below shows predicted fire weather the area. The
 #   )
 
 ```
-
- 
-
-
-
