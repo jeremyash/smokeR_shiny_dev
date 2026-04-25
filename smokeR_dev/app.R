@@ -8,10 +8,138 @@ require(RCurl)
 require(rjson)
 require(lubridate)
 require(googlesheets4)
+library(gh)
+library(base64enc)
+library(fs)
+
+
+# load data ----------------------------------------------
 
 # unit names
 nfs <-readRDS('usfs_unit_list.RDS')
 
+
+# helper functions ----------------------------------------------
+
+safe_filename <- function(x) {
+  x %>%
+    stringr::str_to_lower() %>%
+    stringr::str_replace_all("[^a-z0-9]+", "-") %>%
+    stringr::str_replace_all("(^-|-$)", "")
+}
+
+upload_report_to_github_pages <- function(
+    local_file,
+    owner,
+    repo,
+    branch = "main",
+    pages_dir = "docs/reports",
+    report_filename
+) {
+  token <- Sys.getenv("GITHUB_PAT")
+  
+  if (identical(token, "")) {
+    stop("GITHUB_PAT is not set.")
+  }
+  
+  github_path <- file.path(pages_dir, report_filename)
+  
+  gh::gh(
+    "PUT /repos/{owner}/{repo}/contents/{path}",
+    owner = owner,
+    repo = repo,
+    path = github_path,
+    message = paste("Add smoke report", report_filename),
+    content = base64enc::base64encode(local_file),
+    branch = branch,
+    .token = token
+  )
+  
+  paste0(
+    "https://",
+    owner,
+    ".github.io/",
+    repo,
+    "/reports/",
+    report_filename
+  )
+}
+
+update_index_page <- function(
+    owner,
+    repo,
+    report_filename,
+    report_label,
+    branch = "main"
+) {
+  token <- Sys.getenv("GITHUB_PAT")
+  
+  if (identical(token, "")) {
+    stop("GITHUB_PAT is not set.")
+  }
+  
+  index_path <- "docs/index.html"
+  
+  existing <- tryCatch(
+    gh::gh(
+      "GET /repos/{owner}/{repo}/contents/{path}",
+      owner = owner,
+      repo = repo,
+      path = index_path,
+      ref = branch,
+      .token = token
+    ),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(existing)) {
+    index_html <- rawToChar(base64enc::base64decode(existing$content))
+    sha <- existing$sha
+  } else {
+    index_html <- paste0(
+      "<!doctype html>\n",
+      "<html>\n",
+      "<head>\n",
+      "  <meta charset='utf-8'>\n",
+      "  <title>Smoke Reports</title>\n",
+      "</head>\n",
+      "<body>\n",
+      "  <h1>Smoke Reports</h1>\n",
+      "  <ul>\n",
+      "  </ul>\n",
+      "</body>\n",
+      "</html>\n"
+    )
+    sha <- NULL
+  }
+  
+  new_entry <- paste0(
+    "    <li><a href='reports/",
+    report_filename,
+    "' target='_blank'>",
+    htmltools::htmlEscape(report_label),
+    "</a></li>\n"
+  )
+  
+  index_html <- sub(
+    "  </ul>",
+    paste0(new_entry, "  </ul>"),
+    index_html,
+    fixed = TRUE
+  )
+  
+  gh::gh(
+    "PUT /repos/{owner}/{repo}/contents/{path}",
+    owner = owner,
+    repo = repo,
+    path = index_path,
+    message = paste("Update index with", report_filename),
+    content = base64enc::base64encode(charToRaw(index_html)),
+    sha = sha,
+    branch = branch,
+    .token = token
+  )
+}
 
 ###################################################################
 ui <- fluidPage(
@@ -47,6 +175,7 @@ ui <- fluidPage(
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
      downloadButton("report", "Download Smoke Report"),
+     uiOutput("report_link_ui"),
      downloadButton("kmz", "Download Google Earth File")
     ),
     ### main panel
@@ -75,6 +204,9 @@ ui <- fluidPage(
 
 ###################################################################
 server <- function(input, output) {
+  
+  # github pages report link
+  report_link <- reactiveVal(NULL)
   
   # reactive handler to capture unit name
   r_unit <- reactive({
@@ -166,7 +298,6 @@ server <- function(input, output) {
   
   ### download handler for report
   output$report <- downloadHandler(
-    # set up file names for downloads
     filename = function() {
       smoke_report_title()
     },
@@ -174,7 +305,7 @@ server <- function(input, output) {
       
       withProgress(message = "Generating smoke report...", value = 0, {
         
-        incProgress(0.15, detail = "Preparing report parameters")
+        incProgress(0.15, detail = "Preparing inputs")
         
         params_ls <- list(
           BURN_NAME = input$BURN_NAME,
@@ -184,34 +315,100 @@ server <- function(input, output) {
           EMAIL = input$EMAIL,
           PHONE = input$PHONE,
           RUN_ID = input$RUN_ID,
-          
-          FORECAST_AQI_SELECT = if (input$REGION == "08") {
-            input$FORECAST_AQI_SELECT
-          } else {
-            NULL
-          },
-          
-          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") {
-            input$SUPERFOG_SCREEN_SELECT
-          } else {
-            NULL
-          },
-          
-          HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT
+          HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
+          FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
+          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL
         )
         
-        incProgress(0.35, detail = "Rendering R Markdown report")
+        report_filename <- paste0(
+          format(Sys.time(), "%Y%m%d-%H%M%S"),
+          "-",
+          safe_filename(input$FOREST),
+          "-",
+          safe_filename(input$BURN_NAME),
+          ".html"
+        )
+        
+        rendered_file <- file.path(tempdir(), report_filename)
+        
+        incProgress(0.40, detail = "Rendering report")
         
         rmarkdown::render(
           "smoke_template_shiny_dev.Rmd",
-          output_file = file,
-          params = params_ls
+          output_file = rendered_file,
+          params = params_ls,
+          envir = new.env(parent = globalenv())
         )
         
-        incProgress(0.50, detail = "Finalizing download")
+        incProgress(0.25, detail = "Uploading (optional)")
+        
+        # SAFE GitHub upload
+        github_success <- tryCatch({
+          
+          report_url <- upload_report_to_github_pages(
+            local_file = rendered_file,
+            owner = "jeremyash",
+            repo = "smoke_reports",
+            branch = "main",
+            pages_dir = "docs/reports",
+            report_filename = report_filename
+          )
+          
+          report_link(report_url)
+          
+          update_index_page(
+            owner = "jeremyash",
+            repo = "smoke_reports",
+            report_filename = report_filename,
+            report_label = paste(
+              input$FOREST,
+              "-",
+              input$BURN_NAME,
+              "-",
+              format(Sys.time(), "%Y-%m-%d %H:%M")
+            ),
+            branch = "main"
+          )
+          
+          TRUE
+          
+        }, error = function(e) {
+          message("GitHub upload failed: ", conditionMessage(e))
+          report_link(NULL)
+          FALSE
+        })
+        
+        incProgress(0.20, detail = "Finalizing")
+        
+        file.copy(rendered_file, file, overwrite = TRUE)
+        
       })
     }
   )
+  
+  ### link to the report on github pages
+  output$report_link_ui <- renderUI({
+    req(report_link())
+    
+    tags$div(
+      style = "margin-top:12px; margin-bottom:12px;",
+      tags$a(
+        href = report_link(),
+        target = "_blank",
+        class = "btn btn-success",
+        "View Report Online"
+      ),
+      tags$div(
+        style = "font-size:12px; color:#666; margin-top:4px;",
+        "Note: the link may take 5–20 seconds to become available."
+      ),
+      tags$div(
+        style = "font-size:12px; color:#666; margin-top:4px; word-break:break-all;",
+        report_link()
+      )
+    )
+  })
+  
   
   ### download handler for kmz
   output$kmz <- downloadHandler(
