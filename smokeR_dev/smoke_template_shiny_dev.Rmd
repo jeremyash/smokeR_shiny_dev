@@ -7,6 +7,7 @@ output:
     toc_float: TRUE
     css: report_styles.css
     highlight: null
+    self_contained: TRUE
 geometry: margin=0.25in
 params: 
   BURN_NAME: NA
@@ -45,6 +46,41 @@ library(googlesheets4)
 library(lutz)
 library(base64enc)
 library(htmlwidgets)
+
+# Embed local/remote images as data URIs so the rendered HTML is self-contained
+make_data_uri <- function(path, mime = "image/png") {
+  if (file.exists(path)) {
+    base64enc::dataURI(file = path, mime = mime)
+  } else {
+    path
+  }
+}
+
+download_data_uri <- function(url, mime = "image/png") {
+  tmp <- tempfile(fileext = ".png")
+
+  tryCatch(
+    {
+      curl::curl_download(url, destfile = tmp, quiet = TRUE)
+      base64enc::dataURI(file = tmp, mime = mime)
+    },
+    error = function(e) {
+      url
+    }
+  )
+}
+
+fire_icon_uri <- make_data_uri("red-fire-flame.png")
+fwd_img_uri <- make_data_uri("fwd.png")
+fasm_img_uri <- make_data_uri("fasm.png")
+
+perm_mon_icon_uri <- download_data_uri(
+  "https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true"
+)
+
+temp_mon_icon_uri <- download_data_uri(
+  "https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true"
+)
 
 # Mazama Science packages
 library(beakr)
@@ -443,9 +479,11 @@ burn_icon <- tibble(
 )
 
 # prep legend
-html_legend <- "<img src='https://github.com/jeremyash/icons/blob/main/red-fire-flame.png?raw=true' style='width:15px;height:15px;'>&nbsp;Burn&nbsp;location<br/>
-<img src='https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true' style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>
-<img src='https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true' style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
+html_legend <- paste0(
+  "<img src='", fire_icon_uri, "' style='width:15px;height:15px;'>&nbsp;Burn&nbsp;location<br/>",
+  "<img src='", perm_mon_icon_uri, "' style='width:13px;height:13px;'>&nbsp;Permanent&nbsp;monitor<br/>",
+  "<img src='", temp_mon_icon_uri, "' style='width:13px;height:13px;'>&nbsp;Temporary&nbsp;monitor<br/>"
+)
 
 # function to create color-fillable icons for temp monitors, color coded by AQI
 pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = "black", ...) {
@@ -459,7 +497,7 @@ pchIcons <- function(pch = 1, width = 30, height = 30, bg_icon = "black", col = 
     points(.5, .5, pch = pch[i], col = col[1], bg = bg_icon[1],
            cex = min(width, height) / 8, ...)
     dev.off()
-    files[i] <- f
+    files[i] <- base64enc::dataURI(file = f, mime = "image/png")
   }
   files
 }
@@ -481,7 +519,7 @@ air_mon_leaflet <-
   addMarkers(
     data = burn_loc, lng = ~lon, lat = ~lat,
     icon = list(
-      iconUrl = "red-fire-flame.png",
+      iconUrl = fire_icon_uri,
       iconWidth = 24,
       iconHeight = 24,
       iconAnchorX = 12,
@@ -854,7 +892,7 @@ avg_leaflet <- leaflet() %>%
   # fire location
  addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
              icon = list(
-               iconUrl = "red-fire-flame.png",
+               iconUrl = fire_icon_uri,
               iconWidth = 24,
                 iconHeight = 24,
                 iconAnchorX = 12,
@@ -960,7 +998,7 @@ addProviderTiles(providers$OpenStreetMap.Mapnik) %>%
   ## fire location
   addMarkers(data = burn_loc, lng = ~lon, lat = ~lat,
              icon = list(
-               iconUrl = "red-fire-flame.png",
+               iconUrl = fire_icon_uri,
                 iconWidth = 24,
                 iconHeight = 24,
                 iconAnchorX = 12,
@@ -1230,12 +1268,12 @@ cat(
     '<div class="link-card-wrap">',
 
       '<div class="link-card">',
-        '<img src="fwd.png" alt="Fire Weather Dashboard">',
+        '<img src="', fwd_img_uri, '" alt="Fire Weather Dashboard">',
         '<a href="', fwd_url, '" target="_blank">Fire Weather Dashboard</a>',
       '</div>',
 
       '<div class="link-card">',
-        '<img src="fasm.png" alt="Fire and Smoke Map">',
+        '<img src="', fasm_img_uri, '" alt="Fire and Smoke Map">',
         '<a href="', fasm_url, '" target="_blank">Fire and Smoke Map</a>',
       '</div>',
 
