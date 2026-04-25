@@ -28,3 +28,197 @@ body .main-container {
   font-size: 15px;
   line-height: 20px;
 }
+
+/* ---------- REPORT ISSUED TIMESTAMP ---------- */
+.report-issued {
+  margin-top: -8px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  color: #555555;
+  font-style: normal;
+}
+
+
+/* ---------- REPORT SUMMARY / FIRE INFO ---------- */
+.fire_info_wrapper {
+  display: grid;
+  grid-template-columns: 1fr 20px 360px;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+.fire_info_wrapper .paragraph {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.fire_info_wrapper .paragraph p {
+  margin: 0 0 8px 0;
+}
+
+.fire_info_wrapper .paragraph strong {
+  display: block;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .fire_info_wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ---------- LINK CARDS ---------- */
+.link-card-wrap {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  margin: 18px 0;
+}
+
+.link-card {
+  position: relative;
+  flex: 1;
+  height: 220px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #cccccc;
+  background: #000000;
+}
+
+.link-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.45;
+}
+
+.link-card a {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white !important;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  padding: 14px;
+}
+
+.link-card a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+  .link-card-wrap {
+    flex-direction: column;
+  }
+
+  .link-card {
+    height: 190px;
+  }
+}
+
+
+/* ---------- PNG LEAFLET OVERLAYS ---------- */
+.png-raster-overlay {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+
+/* ---------- HOURLY SLIDER CONTROL ---------- */
+.hourly-slider-control {
+  background: white;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #cccccc;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  min-width: 260px;
+}
+
+.hourly-slider-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.hourly-slider-label {
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #333333;
+}
+
+.hourly-slider-control input[type="range"] {
+  width: 240px;
+}
+
+
+/* ---------- FLOATING TOC POLISH ---------- */
+.tocify {
+  width: 245px !important;
+  max-width: 245px !important;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* Optional title */
+.tocify::before {
+  content: "Contents";
+  display: block;
+  padding: 9px 10px 6px 10px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #222222;
+  border-bottom: 1px solid #eeeeee;
+  margin-bottom: 4px;
+}
+
+/* Main TOC items */
+.tocify .tocify-item {
+  display: block !important;
+  white-space: normal !important;
+  color: #2b2b2b;
+  font-size: 14px;
+  line-height: 1.25;
+  text-decoration: none;
+  padding: 5px 8px 5px 22px !important;
+  text-indent: -14px !important;
+}
+
+/* Nested TOC items */
+.tocify .tocify-subheader .tocify-item {
+  font-size: 13px;
+  padding-left: 32px !important;
+  text-indent: -14px !important;
+}
+
+/* Remove conflicting styling from inner links */
+.tocify .tocify-item a {
+  display: inline !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-indent: 0 !important;
+  color: inherit !important;
+  text-decoration: none !important;
+  white-space: normal !important;
+}
+
+/* Hover */
+.tocify .tocify-item:hover {
+  background: #f8f8f8;
+  color: #000000;
+}
+
+/* Active section */
+.tocify .tocify-focus {
+  background: #d9d9d9 !important;
+  color: #000000 !important;
+  font-weight: 600;
+  border-radius: 4px;
+}
