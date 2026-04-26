@@ -209,13 +209,13 @@ ui <- fluidPage(
       selectizeInput(
         "AUTHOR",
         "Your name",
-        choices = aq_contact$name,
-        selected = NULL,
+        choices = c("" = "", aq_contact$name),
+        selected = "",
         options = list(
           create = TRUE,
-          placeholder = "Type your name or select from list"
+          placeholder = "Type your name or select from the list"
         )
-      ),
+      )
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
      downloadButton("report", "Download Smoke Report"),
@@ -312,7 +312,7 @@ server <- function(input, output, session) {
   
   # updating author and contact information
   observeEvent(input$AUTHOR, {
-    req(input$AUTHOR)
+    req(!is.null(input$AUTHOR))
     
     matched_contact <- aq_contact %>%
       filter(str_to_lower(name) == str_to_lower(input$AUTHOR))
@@ -320,6 +320,9 @@ server <- function(input, output, session) {
     if (nrow(matched_contact) == 1) {
       updateTextInput(session, "EMAIL", value = matched_contact$email[1])
       updateTextInput(session, "PHONE", value = matched_contact$phone[1])
+    } else {
+      updateTextInput(session, "EMAIL", value = "")
+      updateTextInput(session, "PHONE", value = "")
     }
   })
   
