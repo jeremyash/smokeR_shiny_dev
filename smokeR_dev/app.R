@@ -36,7 +36,7 @@ upload_report_to_github_pages <- function(
     pages_dir = "docs/reports",
     report_filename
 ) {
-  token <- Sys.getenv("GITHUB_PAT")
+  token <- get_github_pat()
   
   if (identical(token, "")) {
     stop("GITHUB_PAT is not set.")
@@ -72,7 +72,7 @@ update_index_page <- function(
     report_label,
     branch = "main"
 ) {
-  token <- Sys.getenv("GITHUB_PAT")
+  token <- get_github_pat()
   
   if (identical(token, "")) {
     stop("GITHUB_PAT is not set.")
@@ -139,6 +139,22 @@ update_index_page <- function(
     branch = branch,
     .token = token
   )
+}
+
+get_github_pat <- function() {
+  token <- Sys.getenv("GITHUB_PAT")
+  
+  if (!identical(token, "")) {
+    return(token)
+  }
+  
+  token_file <- ".secrets/github_pat.txt"
+  
+  if (file.exists(token_file)) {
+    return(trimws(readLines(token_file, warn = FALSE)[1]))
+  }
+  
+  stop("GitHub token not found.")
 }
 
 ###################################################################
