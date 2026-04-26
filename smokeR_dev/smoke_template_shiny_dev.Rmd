@@ -19,8 +19,7 @@ params:
   RUN_ID: NA
   HOURLY_MAP_SELECT: NA 
   FORECAST_AQI_SELECT: NA
-  SUPERFOG_SCREEN_SELECT: NA
-  SUPERFOG_ZIP_PATH: NA
+  SUPERFOG_SCREEN_SELECT: NA 
 ---
 
 ```{r setup, include=FALSE}
@@ -31,7 +30,6 @@ knitr::opts_chunk$set(
 )
 
 library(tidyverse)
-library(data.table)
 library(ggrepel)
 library(png)
 library(curl)
@@ -83,144 +81,6 @@ perm_mon_icon_uri <- download_data_uri(
 temp_mon_icon_uri <- download_data_uri(
   "https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true"
 )
-
-
-# Build lightweight PNG overlays from hourly superfog/smoke point text files.
-# Expected text-file columns include longitude, latitude, and fog.
-# fog == 1 is plotted red and labeled Fog; fog == 0 is plotted yellow and labeled Smoke.
-make_superfog_png_overlays <- function(zip_path,
-                                       burn_tz = "America/New_York",
-                                       point_cex = 0.35,
-                                       png_width = 1200,
-                                       png_height = 900,
-                                       png_res = 150) {
-  if (is.null(zip_path) || is.na(zip_path) || !nzchar(zip_path) || !file.exists(zip_path)) {
-    return(NULL)
-  }
-
-  superfog_txt_dir <- tempfile("superfog_txt_")
-  dir.create(superfog_txt_dir, showWarnings = FALSE, recursive = TRUE)
-
-  superfog_png_dir <- tempfile("superfog_png_")
-  dir.create(superfog_png_dir, showWarnings = FALSE, recursive = TRUE)
-
-  unzip(zip_path, exdir = superfog_txt_dir)
-
-  txt_files <- list.files(
-    superfog_txt_dir,
-    pattern = "\\.txt$",
-    full.names = TRUE,
-    recursive = TRUE
-  )
-
-  if (length(txt_files) == 0) {
-    return(NULL)
-  }
-
-  read_superfog_points <- function(txt_file) {
-    data.table::fread(
-      txt_file,
-      select = c("longitude", "latitude", "fog"),
-      showProgress = FALSE
-    ) %>%
-      transmute(
-        lon = as.numeric(longitude),
-        lat = as.numeric(latitude),
-        fog = as.integer(fog)
-      ) %>%
-      filter(!is.na(lon), !is.na(lat), !is.na(fog))
-  }
-
-  # First pass: get one common image extent so every hourly overlay aligns.
-  bounds_df <- purrr::map_dfr(txt_files, function(txt_file) {
-    x <- read_superfog_points(txt_file)
-
-    tibble(
-      xmin = min(x$lon, na.rm = TRUE),
-      xmax = max(x$lon, na.rm = TRUE),
-      ymin = min(x$lat, na.rm = TRUE),
-      ymax = max(x$lat, na.rm = TRUE)
-    )
-  })
-
-  img_bounds <- list(
-    xmin = min(bounds_df$xmin, na.rm = TRUE),
-    xmax = max(bounds_df$xmax, na.rm = TRUE),
-    ymin = min(bounds_df$ymin, na.rm = TRUE),
-    ymax = max(bounds_df$ymax, na.rm = TRUE)
-  )
-
-  # Add a small padding so points along the edge are not clipped.
-  x_pad <- (img_bounds$xmax - img_bounds$xmin) * 0.01
-  y_pad <- (img_bounds$ymax - img_bounds$ymin) * 0.01
-
-  img_bounds$xmin <- img_bounds$xmin - x_pad
-  img_bounds$xmax <- img_bounds$xmax + x_pad
-  img_bounds$ymin <- img_bounds$ymin - y_pad
-  img_bounds$ymax <- img_bounds$ymax + y_pad
-
-  # Second pass: render each hour as a transparent PNG and encode it for the self-contained report.
-  overlay_df <- purrr::map_dfr(txt_files, function(txt_file) {
-    x <- read_superfog_points(txt_file)
-
-    hour_id <- tools::file_path_sans_ext(basename(txt_file))
-
-    hour_datetime <- suppressWarnings(
-      lubridate::dmy_hm(
-        stringr::str_replace(hour_id, "_", " "),
-        tz = burn_tz
-      )
-    )
-
-    hour_label <- if (!is.na(hour_datetime)) {
-      format(hour_datetime, "%H:%M %b %d, %Y")
-    } else {
-      hour_id
-    }
-
-    out_png <- file.path(superfog_png_dir, paste0(hour_id, ".png"))
-
-    grDevices::png(
-      filename = out_png,
-      width = png_width,
-      height = png_height,
-      bg = "transparent",
-      res = png_res
-    )
-
-    par(mar = c(0, 0, 0, 0), bg = NA)
-
-    plot(
-      x$lon,
-      x$lat,
-      xlim = c(img_bounds$xmin, img_bounds$xmax),
-      ylim = c(img_bounds$ymin, img_bounds$ymax),
-      col = ifelse(x$fog == 1, "#FF0000CC", "#FFFF00AA"),
-      pch = 16,
-      cex = point_cex,
-      axes = FALSE,
-      xlab = "",
-      ylab = "",
-      asp = 1
-    )
-
-    dev.off()
-
-    tibble(
-      file = txt_file,
-      hour_id = hour_id,
-      datetime_local = hour_datetime,
-      label = hour_label,
-      url = base64enc::dataURI(file = out_png, mime = "image/png")
-    )
-  }) %>%
-    arrange(datetime_local, hour_id)
-
-  list(
-    overlays = overlay_df,
-    bounds = img_bounds
-  )
-}
 
 # Mazama Science packages
 library(beakr)
@@ -567,29 +427,6 @@ superfog_sen <- ifelse(burn_info$region == "08",
 ```
 
 <div class="report-issued">`r generated_at_sen`</div>
-
-```{=html}
-<style>
-.hourly-slider-control {
-  background: rgba(255, 255, 255, 0.94);
-  padding: 8px 10px;
-  border-radius: 6px;
-  box-shadow: 0 1px 5px rgba(0,0,0,0.35);
-}
-.hourly-slider-title {
-  font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-.hourly-slider-label {
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-.hourly-slider-control input[type=range] {
-  width: 220px;
-}
-</style>
-```
 
 
 ```{=html}
@@ -1397,119 +1234,6 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
 }
 
 
-## Superfog/Smoke Point PNG Leaflet ------------------------------------------------------------
-if (params$REGION == "08" && params$SUPERFOG_SCREEN_SELECT == "Yes") {
-
-  superfog_overlay_data <- make_superfog_png_overlays(
-    zip_path = params$SUPERFOG_ZIP_PATH,
-    burn_tz = burn_tz
-  )
-
-  if (!is.null(superfog_overlay_data) && nrow(superfog_overlay_data$overlays) > 0) {
-
-    superfog_leaflet <- leaflet() %>%
-      addProviderTiles(providers$OpenStreetMap.Mapnik) %>%
-      addMapPane("superfog_point_map", zIndex = 460) %>%
-      addMapPane("superfog_marker_map", zIndex = 700) %>%
-      addLegend(
-        position = "bottomright",
-        colors = c("#FF0000", "#FFFF00"),
-        labels = c("Fog", "Smoke"),
-        title = "PB Piedmont Output",
-        opacity = 0.9
-      ) %>%
-      fitBounds(
-        lng1 = superfog_overlay_data$bounds$xmin,
-        lat1 = superfog_overlay_data$bounds$ymin,
-        lng2 = superfog_overlay_data$bounds$xmax,
-        lat2 = superfog_overlay_data$bounds$ymax
-      ) %>%
-      addScaleBar(position = "bottomright")
-
-    superfog_leaflet <- superfog_leaflet %>%
-      htmlwidgets::onRender(
-        "
-        function(el, x, data) {
-          var map = this;
-
-          var bounds = [
-            [data.ymin, data.xmin],
-            [data.ymax, data.xmax]
-          ];
-
-          var overlays = data.urls.map(function(url) {
-            return L.imageOverlay(url, bounds, {
-              opacity: 0.95,
-              pane: 'superfog_point_map',
-              className: 'png-raster-overlay'
-            });
-          });
-
-          var currentIndex = 0;
-          overlays[currentIndex].addTo(map);
-
-          var fireIcon = L.icon({
-            iconUrl: data.fire_icon,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-          });
-
-          L.marker([data.burn_lat, data.burn_lon], {
-            icon: fireIcon,
-            pane: 'superfog_marker_map',
-            zIndexOffset: 10000
-          }).addTo(map);
-
-          var sliderControl = L.control({position: 'bottomleft'});
-
-          sliderControl.onAdd = function(map) {
-            var div = L.DomUtil.create('div', 'hourly-slider-control leaflet-bar');
-            div.innerHTML = `
-              <div class='hourly-slider-title'>Superfog / Smoke Output</div>
-              <div class='hourly-slider-label' id='superfog-label-${el.id}'>${data.labels[0]}</div>
-              <input id='superfog-slider-${el.id}' type='range' min='0' max='${data.urls.length - 1}' value='0' step='1'>
-            `;
-
-            L.DomEvent.disableClickPropagation(div);
-            L.DomEvent.disableScrollPropagation(div);
-
-            return div;
-          };
-
-          sliderControl.addTo(map);
-
-          var slider = document.getElementById('superfog-slider-' + el.id);
-          var label = document.getElementById('superfog-label-' + el.id);
-
-          slider.addEventListener('input', function(e) {
-            var newIndex = parseInt(e.target.value);
-
-            if (map.hasLayer(overlays[currentIndex])) {
-              map.removeLayer(overlays[currentIndex]);
-            }
-
-            overlays[newIndex].addTo(map);
-            currentIndex = newIndex;
-            label.innerHTML = data.labels[newIndex];
-          });
-        }
-        ",
-        data = list(
-          urls = superfog_overlay_data$overlays$url,
-          labels = superfog_overlay_data$overlays$label,
-          xmin = superfog_overlay_data$bounds$xmin,
-          ymin = superfog_overlay_data$bounds$ymin,
-          xmax = superfog_overlay_data$bounds$xmax,
-          ymax = superfog_overlay_data$bounds$ymax,
-          burn_lon = burn_loc$lon[1],
-          burn_lat = burn_loc$lat[1],
-          fire_icon = fire_icon_uri
-        )
-      )
-  }
-}
-
-
 # remove smoke dispersion files from directory
 unlink(outlook_path,
        recursive = TRUE)
@@ -1545,17 +1269,8 @@ hourly_leaflet
 ```{r superfog_section, results='asis'}
 if (params$REGION == "08") {
   cat("## Superfog Screening\n\n")
-  cat(superfog_sen, "\n\n")
-
-  if (params$SUPERFOG_SCREEN_SELECT == "Yes" && exists("superfog_leaflet")) {
-    cat("### PB Piedmont Superfog / Smoke Output\n\n")
-    cat("Use the slider on the map to view hourly PB Piedmont output. Points shown in red are labeled **Fog** and points shown in yellow are labeled **Smoke**.\n\n")
-  }
+  cat(superfog_sen, "\n")
 }
-```
-
-```{r superfog_leaflet_map_show, out.width="100%", echo=FALSE, eval=params$REGION == "08" && params$SUPERFOG_SCREEN_SELECT == "Yes" && exists("superfog_leaflet")}
-superfog_leaflet
 ```
 
 
