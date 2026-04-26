@@ -766,25 +766,38 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
     .[grepl("^pm25_100m_hourly_GreyColorBar_[0-9]{12}\\.png$", .)] %>%
     sort()
 
-  hourly_png_urls <- paste0(hourly_png_url, hourly_png_files)
-  hourly_png_local <- file.path(hourly_path, basename(hourly_png_files))
+  hourly_df <- tibble(
+    file = hourly_png_files,
+    url = paste0(hourly_png_url, hourly_png_files)
+  ) %>%
+    mutate(
+      datetime_str = stringr::str_extract(file, "[0-9]{12}"),
+      datetime_local = lubridate::ymd_hm(datetime_str, tz = burn_tz)
+    ) %>%
+    filter(!is.na(datetime_local)) %>%
+    arrange(datetime_local)
 
-  purrr::walk2(
-    hourly_png_urls,
-    hourly_png_local,
-    ~ curl::curl_download(.x, destfile = .y)
+  flaming_start_local <- lubridate::ymd_hms(
+    paste0(
+      lubridate::year(burn_info$date[1]),
+      "-",
+      burn_info$flaming_start[1]
+    ),
+    tz = burn_tz
   )
 
-  hourly_labels <- hourly_png_files %>%
-    stringr::str_extract("[0-9]{12}") %>%
-    lubridate::ymd_hm(tz = "UTC") %>%
-    lubridate::with_tz(tzone = burn_tz) %>%
-    format("%H:%M %b %d, %Y")
+  hourly_df <- hourly_df %>%
+    filter(datetime_local >= flaming_start_local - lubridate::hours(1))
 
-  hourly_png_data <- purrr::map_chr(
-    hourly_png_local,
-    ~ base64enc::dataURI(file = .x, mime = "image/png")
+  hourly_png_urls <- hourly_df$url
+
+  hourly_labels <- format(
+    hourly_df$datetime_local,
+    "%H:%M %b %d, %Y"
   )
+
+  # Use online URLs to avoid huge self-contained reports
+  hourly_png_data <- hourly_png_urls
 }
 
 ## PREP POPULATION DATA ----------------------------------------------
