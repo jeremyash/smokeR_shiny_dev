@@ -216,7 +216,7 @@ ui <- fluidPage(
           create = TRUE,
           placeholder = "Type your name or select from the list"
         )
-      )
+      ),
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
      downloadButton("report", "Download Smoke Report"),
