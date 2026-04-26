@@ -22,7 +22,8 @@ nfs <-readRDS('usfs_unit_list.RDS')
 aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-Weese", "Jacob Deal", "Alexia Prosperi"),
                      
                      email = c("jeremy.ash@usda.gov", "melanie.pitrolo@usda.gov", "ghazal.majidi-weese@usda.gov", "jacob.deal@usda.gov", "alexia.prosperi@usda.gov"),
-                     phone = c("828-244-4751", "470-882-9854", "828-337-2323", "202-494-5127", "888-888-8888")) 
+                     phone = c("828-244-4751", "470-882-9854", "828-337-2323", "202-494-5127", "888-888-8888")) %>% 
+  arrange(name)
 
 
 # helper functions ----------------------------------------------
