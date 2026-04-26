@@ -185,12 +185,11 @@ ui <- fluidPage(
   sidebarLayout(
     ### sidebar
     sidebarPanel(
-      
+
       # choices = c("01", "02", "03", "04", "05", "06", "08", "09")
       selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
       uiOutput("FORECAST_AQI"),
       uiOutput("SUPERFOG_SCREEN"),
-      uiOutput("SUPERFOG_ZIP_UPLOAD"),
       # selectizeInput(
       #   "FOREST",
       #   'Choose your USFS unit',
@@ -201,8 +200,8 @@ ui <- fluidPage(
       #                                   this.setValue(""); }')
       #   )),
       uiOutput("FOREST"),
-      textInput("BURN_NAME", "Name of burn unit"),
-      textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
+        textInput("BURN_NAME", "Name of burn unit"),
+        textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
       selectInput(
         "HOURLY_MAP_SELECT",
         "Include hourly smoke map?",
@@ -218,10 +217,10 @@ ui <- fluidPage(
           placeholder = "Type your name or select from the list"
         )
       ),
-      textInput("EMAIL", "Your email (optional)"),
-      textInput("PHONE", "Your phone number (optional)"),
-      downloadButton("report", "Download Smoke Report"),
-      downloadButton("kmz", "Download Google Earth File")
+        textInput("EMAIL", "Your email (optional)"),
+        textInput("PHONE", "Your phone number (optional)"),
+     downloadButton("report", "Download Smoke Report"),
+     downloadButton("kmz", "Download Google Earth File")
     ),
     ### main panel
     mainPanel(
@@ -265,8 +264,7 @@ server <- function(input, output, session) {
       input$EMAIL,
       input$PHONE,
       input$FORECAST_AQI_SELECT,
-      input$SUPERFOG_SCREEN_SELECT,
-      input$SUPERFOG_ZIP
+      input$SUPERFOG_SCREEN_SELECT
     ),
     {
       report_link(NULL)
@@ -374,24 +372,7 @@ server <- function(input, output, session) {
   output$SUPERFOG_SCREEN <- renderUI({
     if(input$REGION == "08"){
       selectInput("SUPERFOG_SCREEN_SELECT", "Potential for superfog formation?", choices = c("No",
-                                                                                             "Yes"))
-    } else {
-      NULL
-    }
-  })
-  
-  # REGION 08 + superfog only PB Piedmont upload
-  output$SUPERFOG_ZIP_UPLOAD <- renderUI({
-    if (
-      isTRUE(input$REGION == "08") &&
-      !is.null(input$SUPERFOG_SCREEN_SELECT) &&
-      input$SUPERFOG_SCREEN_SELECT == "Yes"
-    ) {
-      fileInput(
-        "SUPERFOG_ZIP",
-        "Upload PB Piedmont hourly_output.zip here",
-        accept = c(".zip", "application/zip", "application/x-zip-compressed")
-      )
+                                                                                            "Yes"))
     } else {
       NULL
     }
@@ -410,43 +391,6 @@ server <- function(input, output, session) {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
-        superfog_zip_path <- NULL
-        
-        if (
-          isTRUE(input$REGION == "08") &&
-          !is.null(input$SUPERFOG_SCREEN_SELECT) &&
-          input$SUPERFOG_SCREEN_SELECT == "Yes"
-        ) {
-          validate(
-            need(
-              !is.null(input$SUPERFOG_ZIP),
-              "Please upload PB Piedmont hourly_output.zip before generating the report."
-            )
-          )
-          
-          validate(
-            need(
-              grepl("\\.zip$", input$SUPERFOG_ZIP$name, ignore.case = TRUE),
-              "The PB Piedmont upload must be a .zip file."
-            )
-          )
-          
-          superfog_zip_path <- file.path(
-            tempdir(),
-            paste0(
-              "pb_piedmont_hourly_output_",
-              format(Sys.time(), "%Y%m%d%H%M%S"),
-              ".zip"
-            )
-          )
-          
-          file.copy(
-            from = input$SUPERFOG_ZIP$datapath,
-            to = superfog_zip_path,
-            overwrite = TRUE
-          )
-        }
-        
         params_ls <- list(
           BURN_NAME = input$BURN_NAME,
           FOREST = input$FOREST,
@@ -457,8 +401,7 @@ server <- function(input, output, session) {
           RUN_ID = input$RUN_ID,
           HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
           FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
-          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL,
-          SUPERFOG_ZIP_PATH = superfog_zip_path
+          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL
         )
         
         burn_name_for_file <- input$BURN_NAME %>%
