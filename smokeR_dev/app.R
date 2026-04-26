@@ -204,7 +204,6 @@ ui <- fluidPage(
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
      downloadButton("report", "Download Smoke Report"),
-     uiOutput("report_link_ui"),
      downloadButton("kmz", "Download Google Earth File")
     ),
     ### main panel
@@ -212,7 +211,8 @@ ui <- fluidPage(
       ### text for selected burn 
       h2(textOutput('selected_unit')),
       h2(textOutput('selected_burn')),
-      ### link to BSKy dispersion results
+      
+      uiOutput("report_link_ui"),
       
       ### footer
       hr(),
@@ -455,20 +455,42 @@ server <- function(input, output) {
     req(report_link())
     
     tags$div(
-      style = "margin-top:12px; margin-bottom:12px;",
-      tags$a(
-        href = report_link(),
-        target = "_blank",
-        class = "btn btn-success",
-        "View Report Online"
-      ),
+      style = "
+      margin: 18px 0 24px 0;
+      padding: 16px 18px;
+      border: 2px solid #4CAF50;
+      border-radius: 8px;
+      background: #f3fff3;
+      font-size: 18px;
+    ",
+      
       tags$div(
-        style = "font-size:12px; color:#666; margin-top:4px;",
+        style = "font-weight:700; font-size:22px; margin-bottom:8px;",
+        "Report available online"
+      ),
+      
+      tags$div(
+        style = "font-size:14px; color:#666; margin-bottom:10px;",
         "Note: the link may take 5–20 seconds to become available."
       ),
+      
       tags$div(
-        style = "font-size:12px; color:#666; margin-top:4px; word-break:break-all;",
-        report_link()
+        style = "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        tags$a(
+          href = report_link(),
+          target = "_blank",
+          style = "word-break:break-all; font-size:18px;",
+          report_link()
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-success",
+          onclick = sprintf(
+            "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
+            report_link()
+          ),
+          "Copy URL"
+        )
       )
     )
   })
