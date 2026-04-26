@@ -7,3 +7,5 @@
 smokeR_dev/.secrets
 path/to/folder/
 smokeR_dev/.secrets
+smokeR_dev/rsconnect
+.DS_Store
