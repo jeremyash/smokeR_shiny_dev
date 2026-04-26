@@ -23,6 +23,7 @@ nfs <-readRDS('usfs_unit_list.RDS')
 
 safe_filename <- function(x) {
   x %>%
+    as.character() %>%
     stringr::str_to_lower() %>%
     stringr::str_replace_all("[^a-z0-9]+", "-") %>%
     stringr::str_replace_all("(^-|-$)", "")
@@ -114,11 +115,14 @@ update_index_page <- function(
   }
   
   new_entry <- paste0(
-    "    <li><a href='reports/",
-    report_filename,
-    "' target='_blank'>",
+    "    <li>",
+    "<a href='reports/", report_filename, "' target='_blank'>",
     htmltools::htmlEscape(report_label),
-    "</a></li>\n"
+    "</a>",
+    "<br><span style='font-size:12px; color:#666;'>",
+    htmltools::htmlEscape(report_filename),
+    "</span>",
+    "</li>\n"
   )
   
   index_html <- sub(
@@ -161,7 +165,7 @@ get_github_pat <- function() {
 ui <- fluidPage(
   title = 'Prescribed Fire Smoke Report',
   titlePanel('Prescribed Fire Smoke Report'),
-  br(),br(),
+  br(), br(),
   sidebarLayout(
     ### sidebar
     sidebarPanel(
@@ -340,7 +344,7 @@ server <- function(input, output) {
       
       withProgress(message = "Generating smoke report...", value = 0, {
         
-        incProgress(0.15, detail = "Preparing inputs")
+        incProgress(0.10, detail = "Preparing report parameters")
         
         params_ls <- list(
           BURN_NAME = input$BURN_NAME,
@@ -355,18 +359,32 @@ server <- function(input, output) {
           SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL
         )
         
+        burn_name_for_file <- input$BURN_NAME %>%
+          as.character() %>%
+          safe_filename()
+        
+        forest_for_file <- input$FOREST %>%
+          as.character() %>%
+          safe_filename()
+        
         report_filename <- paste0(
           format(Sys.time(), "%Y%m%d-%H%M%S"),
           "-",
-          safe_filename(input$FOREST),
+          forest_for_file,
           "-",
-          safe_filename(input$BURN_NAME),
+          burn_name_for_file,
           ".html"
         )
         
         rendered_file <- file.path(tempdir(), report_filename)
         
-        incProgress(0.40, detail = "Rendering report")
+        incProgress(0.15, detail = "Loading burn information and BlueSky results")
+        
+        incProgress(0.15, detail = "Preparing air quality and monitoring data")
+        
+        incProgress(0.10, detail = "Building dispersion map layers")
+        
+        incProgress(0.30, detail = "Rendering full report (maps and analysis)")
         
         rmarkdown::render(
           "smoke_template_shiny_dev.Rmd",
@@ -375,7 +393,7 @@ server <- function(input, output) {
           envir = new.env(parent = globalenv())
         )
         
-        incProgress(0.25, detail = "Uploading (optional)")
+        incProgress(0.10, detail = "Uploading report to GitHub Pages")
         
         # SAFE GitHub upload
         github_success <- tryCatch({
@@ -396,9 +414,9 @@ server <- function(input, output) {
             repo = "smoke_reports",
             report_filename = report_filename,
             report_label = paste(
-              input$FOREST,
+              as.character(input$FOREST),
               "-",
-              input$BURN_NAME,
+              as.character(input$BURN_NAME),
               "-",
               format(Sys.time(), "%Y-%m-%d %H:%M")
             ),
@@ -413,7 +431,7 @@ server <- function(input, output) {
           FALSE
         })
         
-        incProgress(0.20, detail = "Finalizing")
+        incProgress(0.10, detail = "Finalizing report download")
         
         file.copy(rendered_file, file, overwrite = TRUE)
         
