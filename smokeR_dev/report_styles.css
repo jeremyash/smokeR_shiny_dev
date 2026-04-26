@@ -169,7 +169,7 @@ body .main-container {
 
 /* Optional title */
 .tocify::before {
-  content: "Contents";
+  content: "Report Contents";
   display: block;
   padding: 9px 10px 6px 10px;
   font-weight: 700;
