@@ -125,12 +125,21 @@ update_index_page <- function(
     "</li>\n"
   )
   
-  index_html <- sub(
-    "  </ul>",
-    paste0(new_entry, "  </ul>"),
-    index_html,
-    fixed = TRUE
-  )
+  if (grepl("</ul>", index_html, fixed = TRUE)) {
+    index_html <- sub(
+      "</ul>",
+      paste0(new_entry, "</ul>"),
+      index_html,
+      fixed = TRUE
+    )
+  } else {
+    index_html <- paste0(
+      index_html,
+      "\n<ul>\n",
+      new_entry,
+      "</ul>\n"
+    )
+  }
   
   gh::gh(
     "PUT /repos/{owner}/{repo}/contents/{path}",
@@ -414,19 +423,21 @@ server <- function(input, output) {
             repo = "smoke_reports",
             report_filename = report_filename,
             report_label = paste(
-              as.character(input$FOREST),
+              input$FOREST,
               "-",
-              as.character(input$BURN_NAME),
+              input$BURN_NAME,
               "-",
               format(Sys.time(), "%Y-%m-%d %H:%M")
             ),
             branch = "main"
           )
           
+          message("Report uploaded and index updated: ", report_url)
+          
           TRUE
           
         }, error = function(e) {
-          message("GitHub upload failed: ", conditionMessage(e))
+          message("GitHub upload or index update failed: ", conditionMessage(e))
           report_link(NULL)
           FALSE
         })
