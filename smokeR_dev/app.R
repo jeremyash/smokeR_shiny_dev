@@ -210,8 +210,8 @@ ui <- fluidPage(
       selectizeInput(
         "AUTHOR",
         "Your name",
-        choices = aq_contact$name,  
-        selected = NULL,
+        choices = c("Type your name or select from the list" = "", aq_contact$name),
+        selected = "",
         options = list(
           create = TRUE,
           placeholder = "Type your name or select from the list"
@@ -313,7 +313,11 @@ server <- function(input, output, session) {
   
   # updating author and contact information
   observeEvent(input$AUTHOR, {
-    req(!is.null(input$AUTHOR))
+    if (is.null(input$AUTHOR) || input$AUTHOR == "") {
+      updateTextInput(session, "EMAIL", value = "")
+      updateTextInput(session, "PHONE", value = "")
+      return()
+    }
     
     matched_contact <- aq_contact %>%
       filter(str_to_lower(name) == str_to_lower(input$AUTHOR))
@@ -325,7 +329,7 @@ server <- function(input, output, session) {
       updateTextInput(session, "EMAIL", value = "")
       updateTextInput(session, "PHONE", value = "")
     }
-  })
+  }, ignoreInit = FALSE)
   
   # download file names
   forest_burn <- reactive({
