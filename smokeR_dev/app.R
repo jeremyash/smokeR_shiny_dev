@@ -18,6 +18,12 @@ library(fs)
 # unit names
 nfs <-readRDS('usfs_unit_list.RDS')
 
+# author contact info
+aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-Weese", "Jacob Deal", "Alexia Prosperi"),
+                     
+                     email = c("jeremy.ash@usda.gov", "melanie.pitrolo@usda.gov", "ghazal.majidi-weese@usda.gov", "jacob.deal@usda.gov", "alexia.prosperi@usda.gov"),
+                     phone = c("828-244-4751", "470-882-9854", "828-337-2323", "202-494-5127", "888-888-8888")) 
+
 
 # helper functions ----------------------------------------------
 
@@ -200,7 +206,16 @@ ui <- fluidPage(
         "Include hourly smoke map?",
         choices = c("No", "Yes")
       ),
-        textInput("AUTHOR", "Your name"),
+      selectizeInput(
+        "AUTHOR",
+        "Your name",
+        choices = aq_contact$name,
+        selected = NULL,
+        options = list(
+          create = TRUE,
+          placeholder = "Type your name or select from list"
+        )
+      ),
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
      downloadButton("report", "Download Smoke Report"),
@@ -232,7 +247,7 @@ ui <- fluidPage(
 
 
 ###################################################################
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   # github pages report link
   report_link <- reactiveVal(NULL)
@@ -293,6 +308,19 @@ server <- function(input, output) {
   # render text for run id
   output$run_id <- renderText({
     paste(input$RUN_ID)
+  })
+  
+  # updating author and contact information
+  observeEvent(input$AUTHOR, {
+    req(input$AUTHOR)
+    
+    matched_contact <- aq_contact %>%
+      filter(str_to_lower(name) == str_to_lower(input$AUTHOR))
+    
+    if (nrow(matched_contact) == 1) {
+      updateTextInput(session, "EMAIL", value = matched_contact$email[1])
+      updateTextInput(session, "PHONE", value = matched_contact$phone[1])
+    }
   })
   
   # download file names
