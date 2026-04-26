@@ -953,6 +953,44 @@ avg_leaflet <- leaflet() %>%
   hideGroup("Population") %>%
   hideGroup("Distance from Fire") 
 
+# conditional add of temporary monitors
+avg_leaflet <-
+  if (!is.null(temp_mon_df) && nrow(temp_mon_df) > 0) {
+    avg_leaflet %>%
+      addMarkers(
+        lng = ~longitude,
+        lat = ~latitude,
+        icon = list(
+          iconUrl = ~icons,
+          iconSize = c(15, 15)
+        ),
+        popup = ~mon_v5_url,
+        data = temp_mon_df
+      )
+  } else {
+    avg_leaflet
+  }
+
+# conditional add of permanent monitors
+avg_leaflet <-
+  if (!is.null(perm_mon_df) && nrow(perm_mon_df) > 0) {
+    avg_leaflet %>%
+      addCircleMarkers(
+        lng = ~longitude,
+        lat = ~latitude,
+        fillColor = ~aqi_col,
+        fillOpacity = 1,
+        stroke = TRUE,
+        color = "black",
+        popup = ~mon_v5_url,
+        radius = 8,
+        weight = 1,
+        data = perm_mon_df
+      )
+  } else {
+    avg_leaflet
+  }
+
 avg_leaflet <- avg_leaflet %>%
   htmlwidgets::onRender(
     "
@@ -1061,7 +1099,47 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
       lng2 = burn_icon$x + 0.5,
       lat2 = burn_icon$y + 0.5
     ) %>%
-    addScaleBar(position = "bottomright") %>%
+    addScaleBar(position = "bottomright")
+  
+  # conditional add of temporary monitors
+  hourly_leaflet <-
+    if (!is.null(temp_mon_df) && nrow(temp_mon_df) > 0) {
+      hourly_leaflet %>%
+        addMarkers(
+          lng = ~longitude,
+          lat = ~latitude,
+          icon = list(
+            iconUrl = ~icons,
+            iconSize = c(15, 15)
+          ),
+          popup = ~mon_v5_url,
+          data = temp_mon_df
+        )
+    } else {
+      hourly_leaflet
+    }
+  
+  # conditional add of permanent monitors
+  hourly_leaflet <-
+    if (!is.null(perm_mon_df) && nrow(perm_mon_df) > 0) {
+      hourly_leaflet %>%
+        addCircleMarkers(
+          lng = ~longitude,
+          lat = ~latitude,
+          fillColor = ~aqi_col,
+          fillOpacity = 1,
+          stroke = TRUE,
+          color = "black",
+          popup = ~mon_v5_url,
+          radius = 8,
+          weight = 1,
+          data = perm_mon_df
+        )
+    } else {
+      hourly_leaflet
+    }
+    
+  hourly_leaflet <- hourly_leaflet %>% 
     htmlwidgets::onRender(
       "
       function(el, x, data) {
