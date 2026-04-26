@@ -224,6 +224,25 @@ server <- function(input, output) {
   # github pages report link
   report_link <- reactiveVal(NULL)
   
+  observeEvent(
+    list(
+      input$REGION,
+      input$FOREST,
+      input$BURN_NAME,
+      input$RUN_ID,
+      input$HOURLY_MAP_SELECT,
+      input$AUTHOR,
+      input$EMAIL,
+      input$PHONE,
+      input$FORECAST_AQI_SELECT,
+      input$SUPERFOG_SCREEN_SELECT
+    ),
+    {
+      report_link(NULL)
+    },
+    ignoreInit = TRUE
+  )
+  
   # reactive handler to capture unit name
   r_unit <- reactive({
     req(input$FOREST) # require it not to be empty
