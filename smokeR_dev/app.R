@@ -181,41 +181,11 @@ get_github_pat <- function() {
 ui <- fluidPage(
   # favicons
   tags$head(
-    
-    # SVG favicon (highest priority)
-    tags$link(
-      rel = "icon",
-      type = "image/svg+xml",
-      href = "favicon.svg?v=2"
-    ),
-    
-    # Standard ICO fallback
-    tags$link(
-      rel = "shortcut icon",
-      href = "favicon.ico?v=2"
-    ),
-    
-    # PNG fallbacks
-    tags$link(
-      rel = "icon",
-      type = "image/png",
-      sizes = "32x32",
-      href = "favicon-32x32.png?v=2"
-    ),
-    
-    tags$link(
-      rel = "icon",
-      type = "image/png",
-      sizes = "16x16",
-      href = "favicon-16x16.png?v=2"
-    ),
-    
-    # Apple devices
-    tags$link(
-      rel = "apple-touch-icon",
-      sizes = "180x180",
-      href = "apple-touch-icon.png?v=2"
-    )
+    tags$link(rel = "icon", type = "image/svg+xml", href = "smoke-report-favicon.svg?v=20"),
+    tags$link(rel = "icon", type = "image/x-icon", href = "smoke-report-favicon.ico?v=20"),
+    tags$link(rel = "shortcut icon", type = "image/x-icon", href = "smoke-report-favicon.ico?v=20"),
+    tags$link(rel = "icon", type = "image/png", sizes = "32x32", href = "smoke-report-favicon-32x32.png?v=20"),
+    tags$link(rel = "apple-touch-icon", href = "smoke-report-apple-touch-icon.png?v=20")
   ),
   
   # elements
