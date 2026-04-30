@@ -22,7 +22,7 @@ nfs <-readRDS('usfs_unit_list.RDS')
 aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-Weese", "Jacob Deal", "Alexia Prosperi"),
                      
                      email = c("jeremy.ash@usda.gov", "melanie.pitrolo@usda.gov", "ghazal.majidi-weese@usda.gov", "jacob.deal@usda.gov", "alexia.prosperi@usda.gov"),
-                     phone = c("828-244-4751", "470-882-9854", "828-337-2323", "202-494-5127", "888-888-8888")) %>% 
+                     phone = c("828-244-4751", "470-882-9854", "828-337-2323", "202-494-5127", NA)) %>% 
   arrange(name)
 
 
@@ -179,13 +179,24 @@ get_github_pat <- function() {
 
 ###################################################################
 ui <- fluidPage(
-  # favicons
   tags$head(
-    tags$link(rel = "icon", type = "image/svg+xml", href = "smoke-report-favicon.svg?v=20"),
-    tags$link(rel = "icon", type = "image/x-icon", href = "smoke-report-favicon.ico?v=20"),
-    tags$link(rel = "shortcut icon", type = "image/x-icon", href = "smoke-report-favicon.ico?v=20"),
-    tags$link(rel = "icon", type = "image/png", sizes = "32x32", href = "smoke-report-favicon-32x32.png?v=20"),
-    tags$link(rel = "apple-touch-icon", href = "smoke-report-apple-touch-icon.png?v=20")
+    tags$link(
+      rel = "icon",
+      type = "image/png",
+      sizes = "192x192",
+      href = "smoke-report-favicon-192.png?v=100"
+    ),
+    
+    tags$link(
+      rel = "shortcut icon",
+      href = "smoke-report-favicon.ico?v=100"
+    ),
+    
+    tags$link(
+      rel = "apple-touch-icon",
+      sizes = "180x180",
+      href = "smoke-report-apple-touch-icon.png?v=100"
+    )
   ),
   
   # elements
