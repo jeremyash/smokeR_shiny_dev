@@ -468,9 +468,7 @@ The AQI forecasts for today and tomorrow can be turned on by selecting the layer
 # read in burn icon for mapping
 burn_icon <- tibble(
   x = burn_info$lon,
-  y = burn_info$lat,
-  image = "red-fire-flame.png"
-)
+  y = burn_info$lat)
 
 # prep legend
 html_legend <- paste0(
