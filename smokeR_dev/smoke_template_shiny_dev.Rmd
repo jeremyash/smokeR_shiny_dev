@@ -30,22 +30,18 @@ knitr::opts_chunk$set(
 )
 
 library(tidyverse)
-library(ggrepel)
-library(png)
-library(curl)
 library(RCurl)
-library(rjson)
 library(lubridate)
 library(terra)
 library(sf)
 library(kableExtra)
 library(leaflet)
-library(egg)
 library(rvest)
-library(googlesheets4)
+# library(googlesheets4)
 library(lutz)
 library(base64enc)
 library(htmlwidgets)
+library(AirMonitor)
 
 # Embed local/remote images as data URIs so the rendered HTML is self-contained
 make_data_uri <- function(path, mime = "image/png") {
@@ -82,10 +78,7 @@ temp_mon_icon_uri <- download_data_uri(
   "https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true"
 )
 
-# Mazama Science packages
-library(beakr)
-library(MazamaCoreUtils)
-library(AirMonitor)
+
 ```
 
 ```{r burn_info, include = FALSE}
@@ -118,7 +111,7 @@ names(serv_links_ls) <- c("serv1_link",
 date_info_1 <- if (url.exists(serv1_link)) {
   
   # pull end time from output.json
-  end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
+  end_time_val <- lubridate::as_datetime(jsonlite::fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
   
   # create df
   end_time_df <- tibble(server = "serv1_link",
@@ -134,7 +127,7 @@ date_info_1 <- if (url.exists(serv1_link)) {
 date_info_2 <- if (url.exists(serv2_link)) {
   
   # pull end time from output.json
-  end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
+  end_time_val <- lubridate::as_datetime(jsonlite::fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
   
   # create df
   end_time_df <- tibble(server = "serv2_link",
@@ -668,7 +661,7 @@ cat(
 
 ## Modeled Smoke Dispersion
 
-Below are the smoke modeling outputs for the day of the planned burn. The maps show the **daily average concentrations** and **maximum hourly impact to visual range** for `r burn_info$date`. Zoom in or out on each interactive map to view specific features.
+Below are the smoke modeling outputs for the day of the planned burn. The maps show the **daily average concentrations**, **maximum hourly impact to visual range** and **hourly smoke concentations** for `r burn_info$date`. Zoom in or out on each interactive map to view specific features.
 
 
 ```{r leaflet_map_data_mgt, include=FALSE}
@@ -686,7 +679,7 @@ dir.create("temp", showWarnings = FALSE)
 outlook_path <- "temp"
 
 # download daily average PM2.5 PNG
-curl_download(
+curl::curl_download(
   paste0(
     results_output_link,
     "/output/images-pm25/100m/daily_average/UTC",
@@ -701,7 +694,7 @@ curl_download(
 )
 
 # download daily minimum visual range PNG
-curl_download(
+curl::curl_download(
   paste0(
     results_output_link,
     "/output/images-visualrange/100m/daily_minimum/UTC",
@@ -716,7 +709,7 @@ curl_download(
 )
 
 # download grid info
-curl_download(
+curl::curl_download(
   paste0(results_output_link, "/output/grid_info.json"),
   destfile = paste0(outlook_path, "/grid_info.json")
 )
@@ -1259,7 +1252,7 @@ vis_leaflet
 
 ```{r hourly_leaflet_text, results='asis', echo=FALSE, eval=params$HOURLY_MAP_SELECT == "Yes"}
 cat("### Hourly Smoke Conditions\n\n")
-cat("Use the slider on the map to view hourly modeled smoke concentrations.\n\n")
+cat("Use the slider on the map to view the hourly modeled smoke concentrations from the time of ignition.\n\n")
 ```
 
 ```{r hourly_leaflet_map_show, out.width="100%", echo=FALSE, eval=params$HOURLY_MAP_SELECT == "Yes"}
@@ -1277,7 +1270,7 @@ if (params$REGION == "08") {
 
 ## Meteorological and Air Quality Conditions
 
-The Fire Weather Dashboard link below shows predicted fire weather for the area. The Fire and Smoke Map shows air quality conditions and is a good resource for monitoring smoke impacts throughout the day.
+The Fire Weather Dashboard link below shows predicted fire weather for the area. The Fire and Smoke Map shows air quality conditions and is a valuable resource for monitoring smoke impacts throughout the day.
 
 
 ```{r firepoker_link, include=FALSE}
