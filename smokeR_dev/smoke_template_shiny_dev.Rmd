@@ -42,6 +42,7 @@ library(lutz)
 library(base64enc)
 library(htmlwidgets)
 library(AirMonitor)
+library(MazamaCoreUtils)
 
 # Embed local/remote images as data URIs so the rendered HTML is self-contained
 make_data_uri <- function(path, mime = "image/png") {
