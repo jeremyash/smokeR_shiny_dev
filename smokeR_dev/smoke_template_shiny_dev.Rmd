@@ -111,7 +111,7 @@ names(serv_links_ls) <- c("serv1_link",
 date_info_1 <- if (url.exists(serv1_link)) {
   
   # pull end time from output.json
-  end_time_val <- lubridate::as_datetime(jsonlite::fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
+  end_time_val <- lubridate::as_datetime(rjson::fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
   
   # create df
   end_time_df <- tibble(server = "serv1_link",
@@ -127,7 +127,7 @@ date_info_1 <- if (url.exists(serv1_link)) {
 date_info_2 <- if (url.exists(serv2_link)) {
   
   # pull end time from output.json
-  end_time_val <- lubridate::as_datetime(jsonlite::fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
+  end_time_val <- lubridate::as_datetime(rjson::fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
   
   # create df
   end_time_df <- tibble(server = "serv2_link",
