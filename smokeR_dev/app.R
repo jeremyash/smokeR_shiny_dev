@@ -40,13 +40,28 @@ safe_filename <- function(x) {
     stringr::str_replace_all("(^-|-$)", "")
 }
 
+short_forest_name <- function(x) {
+  forest_safe <- safe_filename(x) %>%
+    stringr::str_replace("national-forest", "nf") %>%
+    stringr::str_replace("national-grassland", "ng")
+  
+  tokens <- stringr::str_split(forest_safe, "-", simplify = FALSE)[[1]]
+  tokens <- tokens[tokens != ""]
+  
+  paste0(
+    ifelse(tokens %in% c("nf", "ng"), tokens, stringr::str_sub(tokens, 1, 1)),
+    collapse = ""
+  )
+}
+
 upload_report_to_github_pages <- function(
     local_file,
     owner,
     repo,
     branch = "main",
     pages_dir = "docs/reports",
-    report_filename
+    report_filename,
+    commit_message = paste("Add smoke report", report_filename)
 ) {
   token <- get_github_pat()
   
@@ -61,7 +76,7 @@ upload_report_to_github_pages <- function(
     owner = owner,
     repo = repo,
     path = github_path,
-    message = paste("Add smoke report", report_filename),
+    message = commit_message,
     content = base64enc::base64encode(local_file),
     branch = branch,
     .token = token
@@ -410,7 +425,7 @@ ui <- fluidPage(
     
     ### sidebar
     column(
-      width = 5,
+      width = 4,
       tags$div(
         class = "sidebar-card app-scroll-sidebar",
         
@@ -452,7 +467,7 @@ ui <- fluidPage(
     
     ### main panel
     column(
-      width = 7,
+      width = 8,
       tags$div(
         class = "main-card app-fixed-main",
         
@@ -526,28 +541,18 @@ server <- function(input, output, session) {
   
   # subset Forest names based on Region
   output$FOREST <- renderUI({
-    
-    forest_choices <- nfs[nfs$region == input$REGION, "forests"]
-    
-    selectizeInput(
-      "FOREST",
-      "Forest:",
-      choices = c("Select a forest" = "", forest_choices),
-      selected = "",
-      options = list(
-        placeholder = "Select a forest"
-      )
-    )
+    selectInput("FOREST", "Forest:", choices = nfs[nfs$region==input$REGION,"forests"])
   })
   
+  
+  # render text for unit
   output$selected_unit <- renderText({
-    req(input$FOREST)
-    input$FOREST
+    paste(input$FOREST)
   })
   
+  # render text for burn name
   output$selected_burn <- renderText({
-    req(input$BURN_NAME)
-    input$BURN_NAME
+    paste(input$BURN_NAME)
   })
   
   # render text for run id
@@ -576,26 +581,40 @@ server <- function(input, output, session) {
   }, ignoreInit = FALSE)
   
   # download file names
-  forest_burn <- reactive({
+  burn_name_for_download <- reactive({
     req(input$BURN_NAME)
-    paste(input$BURN_NAME) %>%
-      str_replace_all("[[:punct:]]", "") %>%
-      str_squish() %>%
-      str_replace_all(" ", "_")
+    safe_filename(input$BURN_NAME)
   })
   
-  yearmonday <- str_replace_all(Sys.Date(), "-", "")
+  forest_short_for_download <- reactive({
+    req(input$FOREST)
+    short_forest_name(input$FOREST)
+  })
+  
+  report_date_for_file <- reactive({
+    format(Sys.Date(), "%Y%m%d")
+  })
   
   smoke_report_title <- reactive({
-    paste(yearmonday,
-          "_",
-          forest_burn(), "_smoke_report.html", sep = "")
+    paste0(
+      report_date_for_file(),
+      "-",
+      forest_short_for_download(),
+      "-",
+      burn_name_for_download(),
+      ".html"
+    )
   })
   
   kmz_file <- reactive({
-    paste(yearmonday,
-          "_",
-          forest_burn(), "_bsky_dispersion.kmz", sep = "")
+    paste0(
+      report_date_for_file(),
+      "-",
+      forest_short_for_download(),
+      "-",
+      burn_name_for_download(),
+      "-bsky-dispersion.kmz"
+    )
   })
   
   # REGION 08 only AQI and superfog inputs.
@@ -686,15 +705,14 @@ server <- function(input, output, session) {
           as.character() %>%
           safe_filename()
         
-        forest_short <- forest_for_file %>%
-          stringr::str_replace("national-forest", "nf") %>%
-          stringr::str_replace("national-grassland", "ng") %>%
-          stringr::str_replace_all("-", "")
+        forest_short_for_file <- input$FOREST %>%
+          as.character() %>%
+          short_forest_name()
         
         report_filename <- paste0(
           format(Sys.Date(), "%Y%m%d"),
           "-",
-          forest_short,
+          forest_short_for_file,
           "-",
           burn_name_for_file,
           ".html"
@@ -726,7 +744,7 @@ server <- function(input, output, session) {
           pb_map_filename <- paste0(
             format(Sys.Date(), "%Y%m%d"),
             "-",
-            forest_short,
+            forest_short_for_file,
             "-",
             burn_name_for_file,
             "-pb-piedmont.html"
@@ -756,7 +774,14 @@ server <- function(input, output, session) {
               repo = "smoke_reports",
               branch = "main",
               pages_dir = "docs/pb-piedmont",
-              report_filename = pb_map_filename
+              report_filename = pb_map_filename,
+              commit_message = paste(
+                input$BURN_NAME,
+                "| PB Piedmont |",
+                format(Sys.Date(), "%Y-%m-%d"),
+                "|",
+                input$FOREST
+              )
             )
           }, error = function(e) {
             message("PB Piedmont map upload failed: ", conditionMessage(e))
@@ -792,7 +817,14 @@ server <- function(input, output, session) {
             repo = "smoke_reports",
             branch = "main",
             pages_dir = "docs/reports",
-            report_filename = report_filename
+            report_filename = report_filename,
+            commit_message = paste(
+              input$BURN_NAME,
+              "|",
+              format(Sys.Date(), "%Y-%m-%d"),
+              "|",
+              input$FOREST
+            )
           )
           
           report_link(report_url)
