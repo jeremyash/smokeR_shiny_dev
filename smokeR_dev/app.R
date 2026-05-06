@@ -410,7 +410,7 @@ ui <- fluidPage(
     
     ### sidebar
     column(
-      width = 4,
+      width = 5,
       tags$div(
         class = "sidebar-card app-scroll-sidebar",
         
@@ -452,7 +452,7 @@ ui <- fluidPage(
     
     ### main panel
     column(
-      width = 8,
+      width = 7,
       tags$div(
         class = "main-card app-fixed-main",
         
@@ -526,18 +526,28 @@ server <- function(input, output, session) {
   
   # subset Forest names based on Region
   output$FOREST <- renderUI({
-    selectInput("FOREST", "Forest:", choices = nfs[nfs$region==input$REGION,"forests"])
+    
+    forest_choices <- nfs[nfs$region == input$REGION, "forests"]
+    
+    selectizeInput(
+      "FOREST",
+      "Forest:",
+      choices = c("Select a forest" = "", forest_choices),
+      selected = "",
+      options = list(
+        placeholder = "Select a forest"
+      )
+    )
   })
   
-  
-  # render text for unit
   output$selected_unit <- renderText({
-    paste(input$FOREST)
+    req(input$FOREST)
+    input$FOREST
   })
   
-  # render text for burn name
   output$selected_burn <- renderText({
-    paste(input$BURN_NAME)
+    req(input$BURN_NAME)
+    input$BURN_NAME
   })
   
   # render text for run id
