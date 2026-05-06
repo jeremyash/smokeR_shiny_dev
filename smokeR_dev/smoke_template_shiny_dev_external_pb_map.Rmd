@@ -491,7 +491,7 @@ burn_kable
 ```
 
 
-<div class="report-section"><h2>Recent Air Quality</h2></div>
+##Recent Air Quality
 
 Shown below is the recently measured air quality index (AQI) in the area. The map shows the burn location and the most recent daily AQI for nearby temporary and permanent monitors. Hover over a monitor of interest and click the name to access additional real-time air quality information and measurements from the last 7 days.
 
@@ -694,7 +694,7 @@ cat(
 )
 ```
 
-<div class="report-section"><h2>Modeled Smoke Dispersion</h2></div>
+##Modeled Smoke Dispersion
 
 Below are the smoke modeling outputs for the day of the planned burn. The maps show the **daily average concentrations**, **maximum hourly impact to visual range** and **hourly smoke concentations** for `r burn_info$date`. Zoom in or out on each interactive map to view specific features.
 
@@ -1285,7 +1285,7 @@ unlink(outlook_path,
        recursive = TRUE)
 ```
 
-<div class="report-subsection"><h3>Average Daily Smoke Conditions</h3></div>
+###Average Daily Smoke Conditions
 
 The average daily smoke conditions are helpful for concerns related to public health. Select **Population** to see the number of people in each census tract surrounding the planned burn.
 
@@ -1293,7 +1293,7 @@ The average daily smoke conditions are helpful for concerns related to public he
 avg_leaflet
 ```
 
-<div class="report-subsection"><h3>Maximum Hourly Impact to Visual Range</h3></div>
+###Maximum Hourly Impact to Visual Range
 
 
 The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other sensitive areas.
@@ -1304,7 +1304,7 @@ vis_leaflet
 
 
 ```{r hourly_leaflet_text, results='asis', echo=FALSE, eval=params$HOURLY_MAP_SELECT == "Yes"}
-cat("<div class='report-subsection'><h3>Hourly Smoke Conditions</h3></div>\n\n")
+cat("###Hourly Smoke Conditions\n\n")
 cat("Use the slider on the map to view the hourly modeled smoke concentrations from the time of ignition.\n\n")
 ```
 
@@ -1314,14 +1314,14 @@ hourly_leaflet
 
 ```{r superfog_section, results='asis'}
 if (params$REGION == "08") {
-  cat("<div class='report-section'><h2>Superfog Screening</h2></div>\n\n")
+  cat("##Superfog Screening\n\n")
   cat(superfog_sen, "\n")
 }
 ```
 
 
 
-<div class="report-section"><h2>Meteorological and Air Quality Conditions</h2></div>
+##Meteorological and Air Quality Conditions
 
 
 The Fire Weather Dashboard link below shows predicted fire weather for the area. The Fire and Smoke Map shows air quality conditions and is a valuable resource for monitoring smoke impacts throughout the day.
