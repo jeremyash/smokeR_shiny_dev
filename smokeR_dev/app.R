@@ -63,14 +63,31 @@ upload_report_to_github_pages <- function(
     .token = token
   )
   
-  paste0(
-    "https://",
-    owner,
-    ".github.io/",
-    repo,
-    "/reports/",
-    report_filename
-  )
+  pages_url_dir <- pages_dir %>%
+    stringr::str_replace("^docs/?", "") %>%
+    stringr::str_replace_all("^/|/$", "")
+  
+  if (nzchar(pages_url_dir)) {
+    paste0(
+      "https://",
+      owner,
+      ".github.io/",
+      repo,
+      "/",
+      pages_url_dir,
+      "/",
+      report_filename
+    )
+  } else {
+    paste0(
+      "https://",
+      owner,
+      ".github.io/",
+      repo,
+      "/",
+      report_filename
+    )
+  }
 }
 
 update_index_page <- function(
@@ -232,6 +249,7 @@ ui <- fluidPage(
       selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
       uiOutput("FORECAST_AQI"),
       uiOutput("SUPERFOG_SCREEN"),
+      uiOutput("PB_HOURLY_UPLOAD"),
       # selectizeInput(
       #   "FOREST",
       #   'Choose your USFS unit',
@@ -306,7 +324,8 @@ server <- function(input, output, session) {
       input$EMAIL,
       input$PHONE,
       input$FORECAST_AQI_SELECT,
-      input$SUPERFOG_SCREEN_SELECT
+      input$SUPERFOG_SCREEN_SELECT,
+      input$PB_HOURLY_ZIP
     ),
     {
       report_link(NULL)
@@ -420,6 +439,25 @@ server <- function(input, output, session) {
     }
   })
   
+  # Optional PB Piedmont hourly output upload. Only show this for Region 08
+  # when the spot forecast indicates superfog potential.
+  output$PB_HOURLY_UPLOAD <- renderUI({
+    if (
+      !is.null(input$REGION) &&
+      input$REGION == "08" &&
+      !is.null(input$SUPERFOG_SCREEN_SELECT) &&
+      input$SUPERFOG_SCREEN_SELECT == "Yes"
+    ) {
+      fileInput(
+        "PB_HOURLY_ZIP",
+        "Upload PB Piedmont hourly_output.zip here (optional)",
+        accept = c(".zip", "application/zip", "application/x-zip-compressed")
+      )
+    } else {
+      NULL
+    }
+  })
+  
   
   
   ### download handler for report
@@ -443,7 +481,8 @@ server <- function(input, output, session) {
           RUN_ID = input$RUN_ID,
           HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
           FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
-          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL
+          SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL,
+          PB_MAP_URL = NULL
         )
         
         burn_name_for_file <- input$BURN_NAME %>%
@@ -465,6 +504,70 @@ server <- function(input, output, session) {
         
         rendered_file <- file.path(tempdir(), report_filename)
         
+        # If a PB Piedmont hourly ZIP was uploaded, render it as a separate
+        # standalone HTML file and upload that heavier map to its own GitHub Pages directory.
+        pb_map_url <- NULL
+        pb_zip_available <- (
+          input$REGION == "08" &&
+          !is.null(input$SUPERFOG_SCREEN_SELECT) &&
+          input$SUPERFOG_SCREEN_SELECT == "Yes" &&
+          !is.null(input$PB_HOURLY_ZIP) &&
+          !is.null(input$PB_HOURLY_ZIP$datapath) &&
+          file.exists(input$PB_HOURLY_ZIP$datapath)
+        )
+        
+        if (pb_zip_available) {
+          incProgress(0.08, detail = "Rendering PB Piedmont particle map")
+          
+          pb_zip_copy <- file.path(
+            tempdir(),
+            paste0(tools::file_path_sans_ext(basename(input$PB_HOURLY_ZIP$name)), "-", format(Sys.time(), "%Y%m%d%H%M%S"), ".zip")
+          )
+          file.copy(input$PB_HOURLY_ZIP$datapath, pb_zip_copy, overwrite = TRUE)
+          
+          pb_map_filename <- paste0(
+            format(Sys.time(), "%Y%m%d-%H%M%S"),
+            "-",
+            forest_for_file,
+            "-",
+            burn_name_for_file,
+            "-pb-piedmont-map.html"
+          )
+          
+          pb_rendered_file <- file.path(tempdir(), pb_map_filename)
+          
+          rmarkdown::render(
+            "pb_piedmont_particle_map.Rmd",
+            output_file = pb_rendered_file,
+            params = list(
+              BURN_NAME = input$BURN_NAME,
+              FOREST = input$FOREST,
+              RUN_ID = input$RUN_ID,
+              PB_HOURLY_ZIP = pb_zip_copy,
+              BURN_DATE = NA
+            ),
+            envir = new.env(parent = globalenv())
+          )
+          
+          incProgress(0.07, detail = "Uploading PB Piedmont particle map")
+          
+          pb_map_url <- tryCatch({
+            upload_report_to_github_pages(
+              local_file = pb_rendered_file,
+              owner = "jeremyash",
+              repo = "smoke_reports",
+              branch = "main",
+              pages_dir = "docs/pb-piedmont",
+              report_filename = pb_map_filename
+            )
+          }, error = function(e) {
+            message("PB Piedmont map upload failed: ", conditionMessage(e))
+            NULL
+          })
+        }
+        
+        params_ls$PB_MAP_URL <- pb_map_url
+        
         incProgress(0.15, detail = "Loading burn information and BlueSky results")
         
         incProgress(0.15, detail = "Preparing air quality and monitoring data")
@@ -474,7 +577,7 @@ server <- function(input, output, session) {
         incProgress(0.30, detail = "Rendering full report (maps and analysis)")
         
         rmarkdown::render(
-          "smoke_template_shiny_dev.Rmd",
+          "smoke_template_shiny_dev_external_pb_map.Rmd",
           output_file = rendered_file,
           params = params_ls,
           envir = new.env(parent = globalenv())
