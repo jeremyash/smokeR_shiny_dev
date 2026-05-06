@@ -182,12 +182,44 @@ ui <- fluidPage(
   tags$title("Prescribed Fire Smoke Report"),
   
   tags$head(
+    
+    # Primary favicon for Chrome tabs/pinned tabs
     tags$link(
       rel = "icon",
       type = "image/png",
       sizes = "512x512",
-      href = "favicon_512x512.png?v=103"
-    )),
+      href = "favicon_512x512.png?v=105"
+    ),
+    
+    # Standard browser favicon
+    tags$link(
+      rel = "icon",
+      type = "image/png",
+      sizes = "192x192",
+      href = "favicon_192x192.png?v=105"
+    ),
+    
+    
+    # Optional SVG fallback
+    tags$link(
+      rel = "icon",
+      type = "image/svg+xml",
+      sizes = "any",
+      href = "smoke_flame_icon.svg?v=105"
+    ),
+    
+    # Optional classic favicon fallback
+    tags$link(
+      rel = "shortcut icon",
+      href = "favicon.ico?v=105"
+    ),
+    
+    # Optional Chrome theme color
+    tags$meta(
+      name = "theme-color",
+      content = "#032B5B"
+    )
+  ),
   
   # elements
   titlePanel('Prescribed Fire Smoke Report'),
