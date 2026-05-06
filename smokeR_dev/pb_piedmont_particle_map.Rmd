@@ -1,0 +1,458 @@
+---
+title: "PB Piedmont Output for `r params$BURN_NAME`"
+output:
+  html_document:
+    self_contained: true
+    theme: simplex
+    toc: false
+    css: null
+params:
+  BURN_NAME: NA
+  FOREST: NA
+  RUN_ID: NA
+  PB_HOURLY_ZIP: NA
+  BURN_DATE: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(leaflet)
+library(leafgl)
+library(htmltools)
+library(htmlwidgets)
+library(lutz)
+library(RCurl)
+library(rjson)
+library(base64enc)
+library(jsonlite)
+```
+
+```{r data, include=FALSE}
+# ---- Find BlueSky output server and burn location ----
+serv1_link <- paste0("https://playground-1.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
+serv2_link <- paste0("https://playground-2.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
+serv_links_ls <- list(serv1_link = serv1_link, serv2_link = serv2_link)
+
+date_info_1 <- if (RCurl::url.exists(serv1_link)) {
+  tibble(
+    server = "serv1_link",
+    end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv1_link, "/output.json"))$runtime[["end"]])
+  )
+} else {
+  tibble(server = NA_character_, end_time = as.POSIXct(NA))
+}
+
+date_info_2 <- if (RCurl::url.exists(serv2_link)) {
+  tibble(
+    server = "serv2_link",
+    end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv2_link, "/output.json"))$runtime[["end"]])
+  )
+} else {
+  tibble(server = NA_character_, end_time = as.POSIXct(NA))
+}
+
+recent_server <- bind_rows(date_info_1, date_info_2) %>%
+  filter(!is.na(server)) %>%
+  arrange(desc(end_time)) %>%
+  slice(1) %>%
+  pull(server)
+
+results_output_link <- serv_links_ls[[recent_server]]
+
+burn_info <- read.csv(paste0(results_output_link, "/output/data/fire_locations.csv")) %>%
+  dplyr::select(lat = latitude, lon = longitude, utc_offset, date_time) %>%
+  mutate(date = lubridate::as_date(lubridate::ymd(date_time)))
+
+burn_tz <- lutz::tz_lookup_coords(
+  lat = burn_info$lat[1],
+  lon = burn_info$lon[1],
+  method = "fast"
+)
+
+burn_date <- burn_info$date[1]
+
+fire_icon_uri <- if (file.exists("red-fire-flame.png")) {
+  base64enc::dataURI(file = "red-fire-flame.png", mime = "image/png")
+} else {
+  "https://raw.githubusercontent.com/jeremyash/icons/main/redFlame.png"
+}
+
+# ---- Unzip and index PB Piedmont hourly files ----
+# IMPORTANT: PB Piedmont hourly filenames are treated as the source of truth.
+# Do not convert the filename time into a timezone-aware datetime. The map labels,
+# ordering, and filtering below use exactly the date/time text listed in each .txt filename.
+stopifnot(!is.null(params$PB_HOURLY_ZIP), file.exists(params$PB_HOURLY_ZIP))
+
+pb_hourly_dir <- tempfile("pb_hourly_")
+dir.create(pb_hourly_dir, showWarnings = FALSE, recursive = TRUE)
+unzip(params$PB_HOURLY_ZIP, exdir = pb_hourly_dir)
+
+pb_txt_files <- list.files(
+  pb_hourly_dir,
+  pattern = "^[0-9]{2}[A-Za-z]{3}[0-9]{4}_[0-9]{4}\\.txt$",
+  full.names = TRUE,
+  recursive = TRUE
+)
+
+pb_file_index <- tibble(file = pb_txt_files) %>%
+  mutate(
+    file_name = basename(file),
+    filename_stamp = stringr::str_remove(file_name, "\\.txt$"),
+    file_date_text = stringr::str_extract(filename_stamp, "^[0-9]{2}[A-Za-z]{3}[0-9]{4}"),
+    file_time_text = stringr::str_extract(filename_stamp, "[0-9]{4}$"),
+    file_date = as.Date(stringr::str_to_title(file_date_text), format = "%d%b%Y"),
+    file_hour = as.integer(substr(file_time_text, 1, 2)),
+    file_minute = as.integer(substr(file_time_text, 3, 4)),
+    file_minutes = file_hour * 60 + file_minute,
+    file_time_label = paste0(substr(file_time_text, 1, 2), ":", substr(file_time_text, 3, 4)),
+    display_label = paste0(format(file_date, "%b %d, %Y"), " ", file_time_label),
+
+    # Group overnight period by the evening date.
+    # Example:
+    # 03apr2026_1930 -> overnight_date = 2026-04-03
+    # 04apr2026_0030 -> overnight_date = 2026-04-03
+    overnight_date = if_else(
+      file_time_text <= "1030",
+      file_date - lubridate::days(1),
+      file_date
+    ),
+
+    # Sort 19:30...23:30 first, then 00:30...10:30.
+    overnight_sort = if_else(
+      file_time_text >= "1930",
+      file_minutes,
+      file_minutes + 1440
+    )
+  ) %>%
+  filter(
+    !is.na(file_date),
+    !is.na(file_time_text),
+    file_time_text >= "0000",
+    file_time_text <= "2359"
+  )
+
+pb_file_index_window <- pb_file_index %>%
+  filter(file_time_text >= "1930" | file_time_text <= "1030")
+
+# If multiple overnight runs are in the ZIP, keep one complete overnight sequence.
+# Prefer the latest overnight sequence in the uploaded files.
+selected_overnight_date <- pb_file_index_window %>%
+  count(overnight_date, sort = TRUE) %>%
+  arrange(desc(overnight_date)) %>%
+  slice(1) %>%
+  pull(overnight_date)
+
+pb_file_index_window <- pb_file_index_window %>%
+  filter(overnight_date == selected_overnight_date) %>%
+  arrange(overnight_sort)
+
+if (nrow(pb_file_index_window) == 0) {
+  stop("No PB Piedmont hourly text files were found in the 19:30-10:30 filename-time window.")
+}
+
+if (nrow(pb_file_index_window) == 0) {
+  stop("No PB Piedmont hourly text files were found in the 19:30-10:30 filename-time window.")
+}
+
+read_pb_particle_file <- function(file) {
+  readr::read_table(file, show_col_types = FALSE) %>%
+    mutate(
+      longitude = as.numeric(longitude),
+      latitude = as.numeric(latitude),
+      fog = as.integer(fog),
+      pt_type = if_else(fog == 1, "Fog", "Smoke"),
+      color = if_else(fog == 1, "darkred", "goldenrod")
+    ) %>%
+    filter(!is.na(longitude), !is.na(latitude), !is.na(fog)) %>%
+    sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+}
+
+pb_layers <- purrr::map(
+  pb_file_index_window$file,
+  read_pb_particle_file
+)
+
+pb_all <- dplyr::bind_rows(pb_layers) %>% sf::st_drop_geometry()
+
+pb_labels <- pb_file_index_window$display_label
+pb_group_names <- paste0("pb-hour-", seq_along(pb_layers))
+
+map_date_label <- if (!all(is.na(params$BURN_DATE))) {
+  as.character(params$BURN_DATE)
+} else {
+  as.character(max(pb_file_index_window$file_date, na.rm = TRUE))
+}
+
+map_title <- paste0("PB Piedmont Output for ", params$BURN_NAME, " [", map_date_label, "]")
+
+caution_html <- HTML("Please note: for internal use only.<br>Do not distribute outside of USFS.")
+```
+
+<style>
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.main-container {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+h1.title {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 22px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #ddd;
+}
+
+.leaflet-container {
+  width: 100% !important;
+  height: calc(100vh - 58px) !important;
+}
+
+.leaflet-control.map-title {
+  color: red;
+  text-align: left;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.75);
+  font-weight: bold;
+  font-size: 20px;
+  border-radius: 4px;
+  clear: none !important;
+  margin-left: 8px !important;
+  margin-top: 10px !important;
+}
+
+/* Keep the disclaimer to the right of the +/- zoom buttons. */
+.leaflet-left .leaflet-control.map-title {
+  float: left !important;
+}
+
+.burn-fire-icon {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(0,0,0,0.35);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+
+.burn-fire-icon img {
+  width: 24px !important;
+  height: 24px !important;
+  margin: 3px;
+  object-fit: contain;
+}
+
+.pb-slider-control {
+  background-color: rgba(255,255,255,0.88);
+  color: black;
+  font-family: Open Sans, sans-serif;
+  font-weight: bold;
+  padding: 8px 16px 12px 16px;
+  border-radius: 5pt;
+  box-shadow: 0pt 0pt 6pt 0px rgba(61,59,61,0.48);
+  min-width: 460px;
+}
+
+.pb-slider-title {
+  margin-bottom: 3px;
+  font-size: 18px;
+}
+
+.pb-slider-label {
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.pb-slider-control input[type='range'] {
+  width: 420px;
+}
+
+.leaflet-control .legend {
+  font-size: 16px !important;
+  line-height: 22px !important;
+  padding: 12px 14px !important;
+}
+
+.leaflet-control .legend i {
+  width: 20px !important;
+  height: 20px !important;
+}
+</style>
+
+```{r update_browser_title, results='asis', echo=FALSE}
+cat(
+  paste0(
+    "<script>",
+    "document.addEventListener('DOMContentLoaded', function() {",
+    "  document.title = ", jsonlite::toJSON(map_title, auto_unbox = TRUE), ";",
+    "  var h1 = document.querySelector('h1.title');",
+    "  if (h1) h1.textContent = ", jsonlite::toJSON(map_title, auto_unbox = TRUE), ";",
+    "});",
+    "</script>"
+  )
+)
+```
+
+```{r map, out.width='100%'}
+# Build a deterministic one-hour-at-a-time canvas map.
+# This more closely matches the old Shiny app behavior:
+#   filteredData() %>% filter(start_time == input$date[1])
+# and then redraws all particles for that selected timestep.
+
+pb_hour_payload <- purrr::map(
+  pb_file_index_window$file,
+  function(file) {
+    readr::read_table(file, show_col_types = FALSE) %>%
+      transmute(
+        longitude = as.numeric(longitude),
+        latitude = as.numeric(latitude),
+        fog = as.integer(fog),
+        color = if_else(fog == 1, "darkred", "goldenrod")
+      ) %>%
+      filter(!is.na(longitude), !is.na(latitude), !is.na(fog))
+  }
+)
+
+pb_map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
+  addProviderTiles(providers$CartoDB.Voyager, group = "Street") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Terrain") %>%
+  fitBounds(
+    lng1 = min(pb_all$longitude, na.rm = TRUE),
+    lat1 = min(pb_all$latitude, na.rm = TRUE),
+    lng2 = max(pb_all$longitude, na.rm = TRUE),
+    lat2 = max(pb_all$latitude, na.rm = TRUE)
+  ) %>%
+  addLegend(
+    "bottomleft",
+    colors = c("darkred", "goldenrod"),
+    labels = c("Fog", "Smoke"),
+    title = "Particle Type",
+    opacity = 0.6
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(metric = FALSE)) %>%
+  addLayersControl(baseGroups = c("Street", "Terrain")) %>%
+  addControl(caution_html, position = "topleft", className = "map-title") %>%
+  addMarkers(
+    data = burn_info,
+    lng = ~lon,
+    lat = ~lat,
+    icon = leaflet::makeIcon(
+      iconUrl = fire_icon_uri,
+      iconWidth = 30,
+      iconHeight = 30,
+      iconAnchorX = 15,
+      iconAnchorY = 15
+    )
+  )
+
+pb_map %>%
+  htmlwidgets::onRender(
+    "
+    function(el, x, data) {
+      var map = this;
+      var currentIndex = 0;
+      var canvasRenderer = L.canvas({padding: 0.5});
+      var particleLayer = L.layerGroup().addTo(map);
+
+      // Keep the burn icon square/round instead of stretched tall.
+      setTimeout(function() {
+        var markerImgs = el.querySelectorAll('img.leaflet-marker-icon');
+        markerImgs.forEach(function(img) {
+          img.style.width = '30px';
+          img.style.height = '30px';
+          img.style.borderRadius = '50%';
+          img.style.objectFit = 'contain';
+          img.style.background = 'rgba(255,255,255,0.92)';
+          img.style.border = '1px solid rgba(0,0,0,0.35)';
+          img.style.boxShadow = '0 1px 4px rgba(0,0,0,0.35)';
+          img.style.padding = '3px';
+        });
+      }, 0);
+
+      function getPointCount(pts) {
+        if (Array.isArray(pts)) return pts.length;
+        if (pts && Array.isArray(pts.longitude)) return pts.longitude.length;
+        return 0;
+      }
+
+      function getPoint(pts, i) {
+        if (Array.isArray(pts)) return pts[i];
+        return {
+          longitude: pts.longitude[i],
+          latitude: pts.latitude[i],
+          color: pts.color[i]
+        };
+      }
+
+      function redrawParticles(index) {
+        particleLayer.clearLayers();
+        var pts = data.hours[index] || [];
+        var n = getPointCount(pts);
+
+        for (var i = 0; i < n; i++) {
+          var p = getPoint(pts, i);
+          L.circleMarker([p.latitude, p.longitude], {
+            renderer: canvasRenderer,
+            radius: 4,
+            stroke: false,
+            fill: true,
+            fillColor: p.color,
+            fillOpacity: 0.72,
+            interactive: false
+          }).addTo(particleLayer);
+        }
+
+        currentIndex = index;
+        var label = document.getElementById('pb-label-' + el.id);
+        if (label) {
+          label.innerHTML = data.labels[index];
+        }
+      }
+
+      var sliderControl = L.control({position: 'bottomleft'});
+
+      sliderControl.onAdd = function(map) {
+        var div = L.DomUtil.create('div', 'pb-slider-control leaflet-bar');
+        div.innerHTML = `
+          <div class='pb-slider-title'>Time step (hour)</div>
+          <div class='pb-slider-label' id='pb-label-${el.id}'></div>
+          <input id='pb-slider-${el.id}' type='range' min='0' max='${data.hours.length - 1}' value='0' step='1'>
+        `;
+
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        return div;
+      };
+
+      sliderControl.addTo(map);
+
+      var slider = document.getElementById('pb-slider-' + el.id);
+
+      slider.addEventListener('input', function(e) {
+        redrawParticles(parseInt(e.target.value));
+      });
+
+      slider.addEventListener('change', function(e) {
+        redrawParticles(parseInt(e.target.value));
+      });
+
+      redrawParticles(0);
+    }
+    ",
+    data = list(
+      hours = pb_hour_payload,
+      labels = pb_labels
+    )
+  )
+```
+
