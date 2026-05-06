@@ -28,6 +28,10 @@ aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-We
 
 # helper functions ----------------------------------------------
 
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
+
 safe_filename <- function(x) {
   x %>%
     as.character() %>%
@@ -200,106 +204,275 @@ ui <- fluidPage(
   
   tags$head(
     
-    # Primary favicon for Chrome tabs/pinned tabs
     tags$link(
       rel = "icon",
       type = "image/png",
       sizes = "512x512",
-      href = "favicon_512x512.png?v=105"
+      href = "favicon_512x512_rounded.png?v=120"
     ),
-    
-    # Standard browser favicon
-    tags$link(
-      rel = "icon",
-      type = "image/png",
-      sizes = "192x192",
-      href = "favicon_192x192.png?v=105"
-    ),
-    
-    
-    # Optional SVG fallback
-    tags$link(
-      rel = "icon",
-      type = "image/svg+xml",
-      sizes = "any",
-      href = "smoke_flame_icon.svg?v=105"
-    ),
-    
-    # Optional classic favicon fallback
     tags$link(
       rel = "shortcut icon",
-      href = "favicon.ico?v=105"
+      type = "image/png",
+      href = "favicon_512x512_rounded.png?v=120"
     ),
     
     # Optional Chrome theme color
     tags$meta(
       name = "theme-color",
       content = "#032B5B"
-    )
+    ),
+    
+    # App styling
+    tags$style(HTML("
+      body {
+        background: #f3f6f8;
+        color: #1f2d3a;
+      }
+
+      .container-fluid {
+        max-width: 1500px;
+      }
+
+      .app-title-banner {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin: 18px 0 24px 0;
+        padding: 20px 24px;
+        background: linear-gradient(90deg, #032B5B 0%, #0B3D73 100%);
+        border-radius: 16px;
+        border-left: 8px solid #F28C28;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.20);
+      }
+
+      .app-title-banner img {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+        flex-shrink: 0;
+      }
+
+      .app-title-text {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .app-title-main {
+        color: white;
+        font-size: 34px;
+        font-weight: 800;
+        line-height: 1.05;
+        margin: 0;
+      }
+
+      .app-title-sub {
+        color: rgba(255,255,255,0.84);
+        font-size: 16px;
+        margin-top: 7px;
+        letter-spacing: 0.3px;
+      }
+
+      .sidebar-card, .main-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #d8e0e6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      }
+
+      .sidebar-card {
+        padding: 18px 18px 10px 18px;
+      }
+
+      .main-card {
+        padding: 22px 24px;
+      }
+
+      .app-section-title {
+        margin: 18px 0 12px 0;
+        padding: 8px 10px;
+        background: #EAF1F5;
+        color: #032B5B;
+        border-left: 6px solid #F28C28;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      .app-section-title:first-child {
+        margin-top: 0;
+      }
+
+      .form-group label {
+        color: #032B5B;
+        font-weight: 700;
+      }
+
+      .form-control, .selectize-input {
+        border-radius: 6px;
+        border-color: #b8c5cf;
+      }
+
+      .btn {
+        border-radius: 8px;
+        font-weight: 700;
+      }
+
+      #report {
+        background: #F28C28;
+        border-color: #D8791F;
+        color: white;
+        margin-right: 8px;
+        margin-bottom: 8px;
+      }
+
+      #kmz {
+        background: #032B5B;
+        border-color: #032B5B;
+        color: white;
+        margin-bottom: 8px;
+      }
+
+      .selected-summary {
+        padding: 14px 16px;
+        margin-bottom: 18px;
+        background: linear-gradient(90deg, #EAF1F5, #ffffff);
+        border-left: 6px solid #F28C28;
+        border-radius: 8px;
+      }
+
+      .selected-summary h2 {
+        margin: 0 0 5px 0;
+        color: #032B5B;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .app-help-box {
+        margin-top: 22px;
+        padding: 16px 18px;
+        background: #F8FAFB;
+        border: 1px solid #d8e0e6;
+        border-radius: 10px;
+        color: #334;
+      }
+
+      .app-help-box a {
+        color: #032B5B;
+        font-weight: 700;
+      }
+
+      /* Keep the report link/status panel visible while long inputs scroll. */
+      .app-layout-row {
+        align-items: flex-start;
+      }
+
+      .app-scroll-sidebar {
+        max-height: calc(100vh - 150px);
+        overflow-y: auto;
+        padding-right: 8px;
+      }
+
+      .app-fixed-main {
+        position: sticky;
+        top: 16px;
+      }
+
+      @media (max-width: 991px) {
+        .app-scroll-sidebar {
+          max-height: none;
+          overflow-y: visible;
+          padding-right: 0;
+        }
+
+        .app-fixed-main {
+          position: static;
+        }
+      }
+    "))
   ),
   
   # elements
-  titlePanel('Prescribed Fire Smoke Report'),
-  br(), br(),
-  sidebarLayout(
+  tags$div(
+    class = "app-title-banner",
+    tags$img(src = "favicon_512x512_rounded.png", alt = "Smoke Report Icon"),
+    tags$div(
+      class = "app-title-text",
+      tags$div(class = "app-title-main", "Prescribed Fire Smoke Report Generator"),
+      tags$div(class = "app-title-sub", "BlueSky Plaground dispersion results and air quality information")
+    )
+  ),
+  
+  fluidRow(
+    class = "app-layout-row",
+    
     ### sidebar
-    sidebarPanel(
-
-      # choices = c("01", "02", "03", "04", "05", "06", "08", "09")
-      selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
-      uiOutput("FORECAST_AQI"),
-      uiOutput("SUPERFOG_SCREEN"),
-      uiOutput("PB_HOURLY_UPLOAD"),
-      # selectizeInput(
-      #   "FOREST",
-      #   'Choose your USFS unit',
-      #   choices = nfs,
-      #   options=list(
-      #     placeholder='Begin typing',
-      #     onInitialize = I('function() {
-      #                                   this.setValue(""); }')
-      #   )),
-      uiOutput("FOREST"),
+    column(
+      width = 4,
+      tags$div(
+        class = "sidebar-card app-scroll-sidebar",
+        
+        tags$div(class = "app-section-title", "Burn information"),
+        selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
+        uiOutput("FOREST"),
         textInput("BURN_NAME", "Name of burn unit"),
+        
+        uiOutput("REGION_08_OPTIONS"),
+        uiOutput("PB_HOURLY_UPLOAD"),
+        
+        tags$div(class = "app-section-title", "Model output"),
         textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
-      selectInput(
-        "HOURLY_MAP_SELECT",
-        "Include hourly smoke map?",
-        choices = c("No", "Yes")
-      ),
-      selectizeInput(
-        "AUTHOR",
-        "Your name",
-        choices = c("Type your name or select from the list" = "", aq_contact$name),
-        selected = "",
-        options = list(
-          create = TRUE,
-          placeholder = "Type your name or select from the list"
-        )
-      ),
+        selectInput(
+          "HOURLY_MAP_SELECT",
+          "Include hourly smoke map?",
+          choices = c("No", "Yes")
+        ),
+        
+        tags$div(class = "app-section-title", "Contact information"),
+        selectizeInput(
+          "AUTHOR",
+          "Your name",
+          choices = c("Type your name or select from the list" = "", aq_contact$name),
+          selected = "",
+          options = list(
+            create = TRUE,
+            placeholder = "Type your name or select from the list"
+          )
+        ),
         textInput("EMAIL", "Your email (optional)"),
         textInput("PHONE", "Your phone number (optional)"),
-     downloadButton("report", "Download Smoke Report"),
-     downloadButton("kmz", "Download Google Earth File")
+        
+        tags$div(class = "app-section-title", "Downloads"),
+        downloadButton("report", "Download Smoke Report"),
+        downloadButton("kmz", "Download Google Earth File")
+      )
     ),
+    
     ### main panel
-    mainPanel(
-      ### text for selected burn 
-      h2(textOutput('selected_unit')),
-      h2(textOutput('selected_burn')),
-      
-      uiOutput("report_link_ui"),
-      
-      ### footer
-      hr(),
-      div(class='footer',
-          p('This site will create an html report showing the estimated smoke dispersion from BlueSky Playground and recent ambient air quality surrounding the proposed burn. Input the requested information to the left and click download to generate the report. Additionally, you can download the Google Earth ouput showing all of the dispersion results from BlueSky Playground.'),
+    column(
+      width = 8,
+      tags$div(
+        class = "main-card app-fixed-main",
+        
+        tags$div(
+          class = "selected-summary",
+          h2(textOutput('selected_unit')),
+          h2(textOutput('selected_burn'))
+        ),
+        
+        uiOutput("report_link_ui"),
+        
+        tags$div(
+          class = "app-help-box",
+          p('This site will create an HTML report showing the estimated smoke dispersion from BlueSky Playground and recent ambient air quality surrounding the proposed burn. Input the requested information to the left and click download to generate the report. Additionally, you can download the Google Earth output showing all of the dispersion results from BlueSky Playground.'),
           p('Questions or comments can be sent to:',
             a('jeremy.ash@usda.gov',
-              href='jeremy.ash@usda.gov',
-              target='_blank')
-          ),
-          div(style='height:50px')
+              href = 'mailto:jeremy.ash@usda.gov',
+              target = '_blank')
+          )
+        )
       )
     )
   )
@@ -415,35 +588,45 @@ server <- function(input, output, session) {
           forest_burn(), "_bsky_dispersion.kmz", sep = "")
   })
   
-  # REGION 08 only AQI and superfog inputs
-  output$FORECAST_AQI <- renderUI({
-    if(input$REGION == "08"){
-      selectInput("FORECAST_AQI_SELECT", "Forecasted AQI downwind of ignition", choices = c("Good",
-                                                                                            "Moderate",
-                                                                                            "USG",
-                                                                                            "Unhealthy",
-                                                                                            "Very Unhealthy",
-                                                                                            "Hazardous"))
-    } else {
-      NULL
+  # REGION 08 only AQI and superfog inputs.
+  # This section is hidden for all non-08 regions. Keep this separate from
+  # PB_HOURLY_UPLOAD so choosing "Yes" does not cause the selectInput to reset.
+  output$REGION_08_OPTIONS <- renderUI({
+    if (is.null(input$REGION) || input$REGION != "08") {
+      return(NULL)
     }
+    
+    tagList(
+      tags$div(class = "app-section-title", "Region 8 options"),
+      selectInput(
+        "FORECAST_AQI_SELECT",
+        "Forecasted AQI downwind of ignition",
+        choices = c(
+          "Good",
+          "Moderate",
+          "USG",
+          "Unhealthy",
+          "Very Unhealthy",
+          "Hazardous"
+        ),
+        selected = isolate(input$FORECAST_AQI_SELECT %||% "Good")
+      ),
+      selectInput(
+        "SUPERFOG_SCREEN_SELECT",
+        "Potential for superfog formation?",
+        choices = c("No", "Yes"),
+        selected = isolate(input$SUPERFOG_SCREEN_SELECT %||% "No")
+      )
+    )
   })
   
-  
-  output$SUPERFOG_SCREEN <- renderUI({
-    if(input$REGION == "08"){
-      selectInput("SUPERFOG_SCREEN_SELECT", "Potential for superfog formation?", choices = c("No",
-                                                                                            "Yes"))
-    } else {
-      NULL
-    }
-  })
-  
-  # Optional PB Piedmont hourly output upload. Only show this for Region 08
-  # when the spot forecast indicates superfog potential.
+  # Optional PB Piedmont hourly output upload. This is intentionally separate
+  # from REGION_08_OPTIONS so it can appear/disappear without recreating the
+  # superfog selectInput and resetting it back to "No".
   output$PB_HOURLY_UPLOAD <- renderUI({
+    req(input$REGION)
+    
     if (
-      !is.null(input$REGION) &&
       input$REGION == "08" &&
       !is.null(input$SUPERFOG_SCREEN_SELECT) &&
       input$SUPERFOG_SCREEN_SELECT == "Yes"
@@ -509,11 +692,11 @@ server <- function(input, output, session) {
         pb_map_url <- NULL
         pb_zip_available <- (
           input$REGION == "08" &&
-          !is.null(input$SUPERFOG_SCREEN_SELECT) &&
-          input$SUPERFOG_SCREEN_SELECT == "Yes" &&
-          !is.null(input$PB_HOURLY_ZIP) &&
-          !is.null(input$PB_HOURLY_ZIP$datapath) &&
-          file.exists(input$PB_HOURLY_ZIP$datapath)
+            !is.null(input$SUPERFOG_SCREEN_SELECT) &&
+            input$SUPERFOG_SCREEN_SELECT == "Yes" &&
+            !is.null(input$PB_HOURLY_ZIP) &&
+            !is.null(input$PB_HOURLY_ZIP$datapath) &&
+            file.exists(input$PB_HOURLY_ZIP$datapath)
         )
         
         if (pb_zip_available) {
