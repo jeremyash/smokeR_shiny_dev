@@ -302,3 +302,28 @@ body .main-container {
   margin-top: 6px;
   letter-spacing: 0.4px;
 }
+
+h2 {
+  margin-top: 34px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, #032B5B, #315C7A);
+  color: white;
+  border-radius: 8px;
+  border-left: 8px solid #F28C28;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.16);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+h3 {
+  margin-top: 26px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #EAF1F5;
+  color: #032B5B;
+  border-left: 6px solid #F28C28;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 700;
+}
