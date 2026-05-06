@@ -686,10 +686,15 @@ server <- function(input, output, session) {
           as.character() %>%
           safe_filename()
         
+        forest_short <- forest_for_file %>%
+          stringr::str_replace("national-forest", "nf") %>%
+          stringr::str_replace("national-grassland", "ng") %>%
+          stringr::str_replace_all("-", "")
+        
         report_filename <- paste0(
-          format(Sys.time(), "%Y%m%d-%H%M%S"),
+          format(Sys.Date(), "%Y%m%d"),
           "-",
-          forest_for_file,
+          forest_short,
           "-",
           burn_name_for_file,
           ".html"
@@ -719,12 +724,12 @@ server <- function(input, output, session) {
           file.copy(input$PB_HOURLY_ZIP$datapath, pb_zip_copy, overwrite = TRUE)
           
           pb_map_filename <- paste0(
-            format(Sys.time(), "%Y%m%d-%H%M%S"),
+            format(Sys.Date(), "%Y%m%d"),
             "-",
-            forest_for_file,
+            forest_short,
             "-",
             burn_name_for_file,
-            "-pb-piedmont-map.html"
+            "-pb-piedmont.html"
           )
           
           pb_rendered_file <- file.path(tempdir(), pb_map_filename)
