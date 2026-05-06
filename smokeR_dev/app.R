@@ -179,28 +179,17 @@ get_github_pat <- function() {
 
 ###################################################################
 ui <- fluidPage(
+  tags$title("Prescribed Fire Smoke Report"),
+  
   tags$head(
     tags$link(
       rel = "icon",
       type = "image/png",
-      sizes = "192x192",
-      href = "smoke-report-favicon-192.png?v=100"
-    ),
-    
-    tags$link(
-      rel = "shortcut icon",
-      href = "smoke-report-favicon.ico?v=100"
-    ),
-    
-    tags$link(
-      rel = "apple-touch-icon",
-      sizes = "180x180",
-      href = "smoke-report-apple-touch-icon.png?v=100"
-    )
-  ),
+      sizes = "512x512",
+      href = "favicon_512x512.png?v=103"
+    )),
   
   # elements
-  title = 'Prescribed Fire Smoke Report',
   titlePanel('Prescribed Fire Smoke Report'),
   br(), br(),
   sidebarLayout(
