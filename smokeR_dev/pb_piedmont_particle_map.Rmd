@@ -109,53 +109,24 @@ pb_file_index <- tibble(file = pb_txt_files) %>%
     file_minute = as.integer(substr(file_time_text, 3, 4)),
     file_minutes = file_hour * 60 + file_minute,
     file_time_label = paste0(substr(file_time_text, 1, 2), ":", substr(file_time_text, 3, 4)),
-    display_label = paste0(format(file_date, "%b %d, %Y"), " ", file_time_label),
-
-    # Group overnight period by the evening date.
-    # Example:
-    # 03apr2026_1930 -> overnight_date = 2026-04-03
-    # 04apr2026_0030 -> overnight_date = 2026-04-03
-    overnight_date = if_else(
-      file_time_text <= "1030",
-      file_date - lubridate::days(1),
-      file_date
-    ),
-
-    # Sort 19:30...23:30 first, then 00:30...10:30.
-    overnight_sort = if_else(
-      file_time_text >= "1930",
-      file_minutes,
-      file_minutes + 1440
-    )
+    display_label = paste0(format(file_date, "%b %d, %Y"), " ", file_time_label)
   ) %>%
   filter(
     !is.na(file_date),
     !is.na(file_time_text),
     file_time_text >= "0000",
     file_time_text <= "2359"
-  )
+  ) %>%
+  arrange(file_date, file_time_text)
 
-pb_file_index_window <- pb_file_index %>%
-  filter(file_time_text >= "1930" | file_time_text <= "1030")
-
-# If multiple overnight runs are in the ZIP, keep one complete overnight sequence.
-# Prefer the latest overnight sequence in the uploaded files.
-selected_overnight_date <- pb_file_index_window %>%
-  count(overnight_date, sort = TRUE) %>%
-  arrange(desc(overnight_date)) %>%
-  slice(1) %>%
-  pull(overnight_date)
-
-pb_file_index_window <- pb_file_index_window %>%
-  filter(overnight_date == selected_overnight_date) %>%
-  arrange(overnight_sort)
+# No time-window filtering here.
+# PB Piedmont filename timestamps are treated as the source of truth and are
+# used exactly as listed in each .txt filename. This keeps the slider order and
+# labels aligned with the uploaded files and avoids timezone conversion issues.
+pb_file_index_window <- pb_file_index
 
 if (nrow(pb_file_index_window) == 0) {
-  stop("No PB Piedmont hourly text files were found in the 19:30-10:30 filename-time window.")
-}
-
-if (nrow(pb_file_index_window) == 0) {
-  stop("No PB Piedmont hourly text files were found in the 19:30-10:30 filename-time window.")
+  stop("No PB Piedmont hourly text files were found in the uploaded ZIP.")
 }
 
 read_pb_particle_file <- function(file) {
@@ -184,7 +155,7 @@ pb_group_names <- paste0("pb-hour-", seq_along(pb_layers))
 map_date_label <- if (!all(is.na(params$BURN_DATE))) {
   as.character(params$BURN_DATE)
 } else {
-  as.character(max(pb_file_index_window$file_date, na.rm = TRUE))
+  paste0(format(min(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"), " to ", format(max(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"))
 }
 
 map_title <- paste0("PB Piedmont Output for ", params$BURN_NAME, " [", map_date_label, "]")
@@ -260,32 +231,20 @@ h1.title {
   padding: 8px 16px 12px 16px;
   border-radius: 5pt;
   box-shadow: 0pt 0pt 6pt 0px rgba(61,59,61,0.48);
-  min-width: 460px;
+  min-width: 340px;
 }
 
 .pb-slider-title {
   margin-bottom: 3px;
-  font-size: 18px;
 }
 
 .pb-slider-label {
-  font-size: 16px;
-  margin-bottom: 6px;
+  font-size: 13px;
+  margin-bottom: 4px;
 }
 
 .pb-slider-control input[type='range'] {
-  width: 420px;
-}
-
-.leaflet-control .legend {
-  font-size: 16px !important;
-  line-height: 22px !important;
-  padding: 12px 14px !important;
-}
-
-.leaflet-control .legend i {
-  width: 20px !important;
-  height: 20px !important;
+  width: 300px;
 }
 </style>
 
@@ -403,7 +362,7 @@ pb_map %>%
           var p = getPoint(pts, i);
           L.circleMarker([p.latitude, p.longitude], {
             renderer: canvasRenderer,
-            radius: 4,
+            radius: 5,
             stroke: false,
             fill: true,
             fillColor: p.color,
