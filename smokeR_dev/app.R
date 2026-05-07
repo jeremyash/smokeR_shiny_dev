@@ -16,7 +16,34 @@ library(fs)
 # load data ----------------------------------------------
 
 # unit names
-nfs <-readRDS('usfs_unit_list.RDS')
+# Read only the two plain character fields needed for UI choices.
+# Do not convert the whole object with as.data.frame()/dplyr first, because
+# some versions of usfs_unit_list.RDS contain an sf geometry column that can
+# break unique(), sort(), selectizeInput(), or dplyr assignment during app startup.
+nfs_raw <- readRDS("usfs_unit_list.RDS")
+
+if (!all(c("region", "forests") %in% names(nfs_raw))) {
+  stop("usfs_unit_list.RDS must contain columns named 'region' and 'forests'.")
+}
+
+nfs <- data.frame(
+  region = as.character(nfs_raw[["region"]]),
+  forests = as.character(nfs_raw[["forests"]]),
+  stringsAsFactors = FALSE
+)
+
+nfs <- nfs[
+  !is.na(nfs$region) &
+    !is.na(nfs$forests) &
+    nzchar(nfs$region) &
+    nzchar(nfs$forests),
+  ,
+  drop = FALSE
+]
+
+# Region 8 forests for standalone PB Piedmont map tab
+r8_forests <- sort(unique(nfs$forests[nfs$region == "08"]))
+
 
 # author contact info
 aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-Weese", "Jacob Deal", "Alexia Prosperi"),
@@ -71,6 +98,20 @@ upload_report_to_github_pages <- function(
   
   github_path <- file.path(pages_dir, report_filename)
   
+  existing <- tryCatch(
+    gh::gh(
+      "GET /repos/{owner}/{repo}/contents/{path}",
+      owner = owner,
+      repo = repo,
+      path = github_path,
+      ref = branch,
+      .token = token
+    ),
+    error = function(e) NULL
+  )
+  
+  sha <- if (!is.null(existing)) existing$sha else NULL
+  
   gh::gh(
     "PUT /repos/{owner}/{repo}/contents/{path}",
     owner = owner,
@@ -78,6 +119,7 @@ upload_report_to_github_pages <- function(
     path = github_path,
     message = commit_message,
     content = base64enc::base64encode(local_file),
+    sha = sha,
     branch = branch,
     .token = token
   )
@@ -87,25 +129,9 @@ upload_report_to_github_pages <- function(
     stringr::str_replace_all("^/|/$", "")
   
   if (nzchar(pages_url_dir)) {
-    paste0(
-      "https://",
-      owner,
-      ".github.io/",
-      repo,
-      "/",
-      pages_url_dir,
-      "/",
-      report_filename
-    )
+    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
   } else {
-    paste0(
-      "https://",
-      owner,
-      ".github.io/",
-      repo,
-      "/",
-      report_filename
-    )
+    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
   }
 }
 
@@ -416,58 +442,94 @@ ui <- fluidPage(
     tags$div(
       class = "app-title-text",
       tags$div(class = "app-title-main", "Prescribed Fire Smoke Report Generator"),
-      tags$div(class = "app-title-sub", "BlueSky Plaground dispersion results and air quality information")
+      tags$div(class = "app-title-sub", "BlueSky Playground, PB Piedmont and Air Quality Information")
     )
   ),
   
   fluidRow(
     class = "app-layout-row",
     
-    ### sidebar
+    ### left tool panel
     column(
-      width = 4,
+      width = 5,
       tags$div(
         class = "sidebar-card app-scroll-sidebar",
         
-        tags$div(class = "app-section-title", "Burn information"),
-        selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
-        uiOutput("FOREST"),
-        textInput("BURN_NAME", "Name of burn unit"),
-        
-        uiOutput("REGION_08_OPTIONS"),
-        uiOutput("PB_HOURLY_UPLOAD"),
-        
-        tags$div(class = "app-section-title", "Model output"),
-        textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
-        selectInput(
-          "HOURLY_MAP_SELECT",
-          "Include hourly smoke map?",
-          choices = c("No", "Yes")
-        ),
-        
-        tags$div(class = "app-section-title", "Contact information"),
-        selectizeInput(
-          "AUTHOR",
-          "Your name",
-          choices = c("Type your name or select from the list" = "", aq_contact$name),
-          selected = "",
-          options = list(
-            create = TRUE,
-            placeholder = "Type your name or select from the list"
+        tabsetPanel(
+          id = "tool_tab",
+          
+          tabPanel(
+            "Smoke Report",
+            
+            tags$div(class = "app-section-title", "Burn information"),
+            selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
+            uiOutput("FOREST"),
+            textInput("BURN_NAME", "Name of burn unit"),
+            
+            uiOutput("REGION_08_OPTIONS"),
+            uiOutput("PB_HOURLY_UPLOAD"),
+            
+            tags$div(class = "app-section-title", "Model output"),
+            textInput("RUN_ID", "Run ID from BlueSky Playground Dispersion Results page"),
+            selectInput(
+              "HOURLY_MAP_SELECT",
+              "Include hourly smoke map?",
+              choices = c("No", "Yes")
+            ),
+            
+            tags$div(class = "app-section-title", "Contact information"),
+            selectizeInput(
+              "AUTHOR",
+              "Your name",
+              choices = c("Type your name or select from the list" = "", aq_contact$name),
+              selected = "",
+              options = list(
+                create = TRUE,
+                placeholder = "Type your name or select from the list"
+              )
+            ),
+            textInput("EMAIL", "Your email (optional)"),
+            textInput("PHONE", "Your phone number (optional)"),
+            
+            tags$div(class = "app-section-title", "Downloads"),
+            downloadButton("report", "Download Smoke Report"),
+            downloadButton("kmz", "Download Google Earth File")
+          ),
+          
+          tabPanel(
+            "PB Piedmont Map",
+            
+            tags$div(class = "app-section-title", "PB Piedmont map information"),
+            selectizeInput(
+              "PB_ONLY_FOREST",
+              "Forest:",
+              choices = c("Select a Region 8 forest" = "", r8_forests),
+              selected = "",
+              options = list(
+                placeholder = "Select a Region 8 forest"
+              )
+            ),
+            textInput("PB_ONLY_BURN_NAME", "Burn unit name"),
+            
+            tags$div(class = "app-section-title", "Burn location"),
+            numericInput("PB_ONLY_LAT", "Latitude", value = NA, min = -90, max = 90, step = 0.0001),
+            numericInput("PB_ONLY_LON", "Longitude", value = NA, min = -180, max = 180, step = 0.0001),
+            
+            tags$div(class = "app-section-title", "PB Piedmont output"),
+            fileInput(
+              "PB_ONLY_HOURLY_ZIP",
+              "Upload PB Piedmont hourly_output.zip",
+              accept = c(".zip", "application/zip", "application/x-zip-compressed")
+            ),
+            actionButton("create_pb_only_map", "Create PB Piedmont Map", class = "btn-primary")
           )
-        ),
-        textInput("EMAIL", "Your email (optional)"),
-        textInput("PHONE", "Your phone number (optional)"),
-        
-        tags$div(class = "app-section-title", "Downloads"),
-        downloadButton("report", "Download Smoke Report"),
-        downloadButton("kmz", "Download Google Earth File")
+        )
       )
     ),
     
-    ### main panel
+    ### right status panel
     column(
-      width = 8,
+      width = 7,
       tags$div(
         class = "main-card app-fixed-main",
         
@@ -478,10 +540,11 @@ ui <- fluidPage(
         ),
         
         uiOutput("report_link_ui"),
+        uiOutput("pb_only_link_ui"),
         
         tags$div(
           class = "app-help-box",
-          p('This site will create an HTML report showing the estimated smoke dispersion from BlueSky Playground and recent ambient air quality surrounding the proposed burn. Input the requested information to the left and click download to generate the report. Additionally, you can download the Google Earth output showing all of the dispersion results from BlueSky Playground.'),
+          p('Use the Smoke Report tab to create a full HTML smoke report using BlueSky Playground output,  optional PB Piedmont mapping and ambient air quality monitoring data. Use the PB Piedmont Map tab to create only the standalone PB Piedmont map from an hourly_output.zip file.'),
           p('Questions or comments can be sent to:',
             a('jeremy.ash@usda.gov',
               href = 'mailto:jeremy.ash@usda.gov',
@@ -498,8 +561,9 @@ ui <- fluidPage(
 ###################################################################
 server <- function(input, output, session) {
   
-  # github pages report link
+  # github pages links
   report_link <- reactiveVal(NULL)
+  pb_only_map_link <- reactiveVal(NULL)
   
   observeEvent(
     list(
@@ -517,6 +581,20 @@ server <- function(input, output, session) {
     ),
     {
       report_link(NULL)
+    },
+    ignoreInit = TRUE
+  )
+  
+  observeEvent(
+    list(
+      input$PB_ONLY_FOREST,
+      input$PB_ONLY_BURN_NAME,
+      input$PB_ONLY_LAT,
+      input$PB_ONLY_LON,
+      input$PB_ONLY_HOURLY_ZIP
+    ),
+    {
+      pb_only_map_link(NULL)
     },
     ignoreInit = TRUE
   )
@@ -539,20 +617,36 @@ server <- function(input, output, session) {
     as.character(input$RUN_ID)
   })
   
-  # subset Forest names based on Region
+  # subset Forest names based on Region; start blank so the right panel stays empty initially
   output$FOREST <- renderUI({
-    selectInput("FOREST", "Forest:", choices = nfs[nfs$region==input$REGION,"forests"])
+    req(input$REGION)
+    
+    forest_choices <- nfs %>%
+      dplyr::filter(region == input$REGION) %>%
+      dplyr::pull(forests)
+    
+    selectizeInput(
+      "FOREST",
+      "Forest:",
+      choices = c("Select a forest" = "", forest_choices),
+      selected = "",
+      options = list(
+        placeholder = "Select a forest"
+      )
+    )
   })
   
   
   # render text for unit
   output$selected_unit <- renderText({
-    paste(input$FOREST)
+    req(input$FOREST)
+    input$FOREST
   })
   
   # render text for burn name
   output$selected_burn <- renderText({
-    paste(input$BURN_NAME)
+    req(input$BURN_NAME)
+    input$BURN_NAME
   })
   
   # render text for run id
@@ -672,6 +766,87 @@ server <- function(input, output, session) {
   
   
   
+  ### create standalone PB Piedmont map only
+  observeEvent(input$create_pb_only_map, {
+    req(input$PB_ONLY_FOREST)
+    req(input$PB_ONLY_BURN_NAME)
+    req(input$PB_ONLY_LAT)
+    req(input$PB_ONLY_LON)
+    req(input$PB_ONLY_HOURLY_ZIP)
+    
+    pb_only_map_link(NULL)
+    
+    withProgress(message = "Creating PB Piedmont map...", value = 0, {
+      
+      incProgress(0.15, detail = "Preparing PB Piedmont map parameters")
+      
+      burn_name_for_file <- input$PB_ONLY_BURN_NAME %>%
+        as.character() %>%
+        safe_filename()
+      
+      forest_short_for_file <- input$PB_ONLY_FOREST %>%
+        as.character() %>%
+        short_forest_name()
+      
+      pb_map_filename <- paste0(
+        format(Sys.Date(), "%Y%m%d"),
+        "-",
+        forest_short_for_file,
+        "-",
+        burn_name_for_file,
+        "-pb-piedmont.html"
+      )
+      
+      pb_zip_copy <- file.path(
+        tempdir(),
+        paste0("pb-hourly-", format(Sys.time(), "%Y%m%d%H%M%S"), ".zip")
+      )
+      
+      file.copy(input$PB_ONLY_HOURLY_ZIP$datapath, pb_zip_copy, overwrite = TRUE)
+      
+      pb_rendered_file <- file.path(tempdir(), pb_map_filename)
+      
+      incProgress(0.45, detail = "Rendering standalone PB Piedmont map")
+      
+      rmarkdown::render(
+        "pb_piedmont_particle_map.Rmd",
+        output_file = pb_rendered_file,
+        params = list(
+          BURN_NAME = input$PB_ONLY_BURN_NAME,
+          FOREST = input$PB_ONLY_FOREST,
+          RUN_ID = NA,
+          PB_HOURLY_ZIP = pb_zip_copy,
+          BURN_DATE = NA,
+          BURN_LAT = input$PB_ONLY_LAT,
+          BURN_LON = input$PB_ONLY_LON
+        ),
+        envir = new.env(parent = globalenv())
+      )
+      
+      incProgress(0.30, detail = "Uploading PB Piedmont map to GitHub Pages")
+      
+      pb_url <- upload_report_to_github_pages(
+        local_file = pb_rendered_file,
+        owner = "jeremyash",
+        repo = "smoke_reports",
+        branch = "main",
+        pages_dir = "docs/pb-piedmont",
+        report_filename = pb_map_filename,
+        commit_message = paste(
+          input$PB_ONLY_BURN_NAME,
+          "| PB Piedmont |",
+          format(Sys.Date(), "%Y-%m-%d"),
+          "|",
+          input$PB_ONLY_FOREST
+        )
+      )
+      
+      pb_only_map_link(pb_url)
+      
+      incProgress(0.10, detail = "PB Piedmont map ready")
+    })
+  })
+  
   ### download handler for report
   output$report <- downloadHandler(
     filename = function() {
@@ -733,7 +908,7 @@ server <- function(input, output, session) {
         )
         
         if (pb_zip_available) {
-          incProgress(0.08, detail = "Rendering PB Piedmont particle map")
+          incProgress(0.08, detail = "Rendering PB Piedmont map")
           
           pb_zip_copy <- file.path(
             tempdir(),
@@ -760,7 +935,9 @@ server <- function(input, output, session) {
               FOREST = input$FOREST,
               RUN_ID = input$RUN_ID,
               PB_HOURLY_ZIP = pb_zip_copy,
-              BURN_DATE = NA
+              BURN_DATE = NA,
+              BURN_LAT = NA,
+              BURN_LON = NA
             ),
             envir = new.env(parent = globalenv())
           )
@@ -882,7 +1059,7 @@ server <- function(input, output, session) {
       
       tags$div(
         style = "font-size:14px; color:#666; margin-bottom:10px;",
-        "Note: the link may take 5–20 seconds to become available."
+        "Note: the link may take 20-60 seconds to become available."
       ),
       
       tags$div(
@@ -899,6 +1076,49 @@ server <- function(input, output, session) {
           onclick = sprintf(
             "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
             report_link()
+          ),
+          "Copy URL"
+        )
+      )
+    )
+  })
+  
+  
+  ### link to standalone PB Piedmont map on GitHub Pages
+  output$pb_only_link_ui <- renderUI({
+    req(pb_only_map_link())
+    
+    tags$div(
+      style = "
+      margin: 18px 0 24px 0;
+      padding: 16px 18px;
+      border: 2px solid #4CAF50;
+      border-radius: 8px;
+      background: #f3fff3;
+      font-size: 18px;
+    ",
+      tags$div(
+        style = "font-weight:700; font-size:22px; margin-bottom:8px;",
+        "PB Piedmont map available online"
+      ),
+      tags$div(
+        style = "font-size:14px; color:#666; margin-bottom:10px;",
+        "Note: the link may take 20-60 seconds to become available."
+      ),
+      tags$div(
+        style = "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        tags$a(
+          href = pb_only_map_link(),
+          target = "_blank",
+          style = "word-break:break-all; font-size:18px;",
+          pb_only_map_link()
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-success",
+          onclick = sprintf(
+            "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
+            pb_only_map_link()
           ),
           "Copy URL"
         )
