@@ -1,5 +1,5 @@
 ---
-title: "PB Piedmont Output for `r params$BURN_NAME`"
+title: ""
 output:
   html_document:
     self_contained: true
@@ -12,6 +12,8 @@ params:
   RUN_ID: NA
   PB_HOURLY_ZIP: NA
   BURN_DATE: NA
+  BURN_LAT: NA
+  BURN_LON: NA
 ---
 
 ```{r setup, include=FALSE}
@@ -31,46 +33,101 @@ library(base64enc)
 library(jsonlite)
 ```
 
+
+```{r title, results='asis', echo=FALSE}
+cat(
+  paste0(
+    "<script>",
+    "document.title = '",
+    params$BURN_NAME,
+    " • ",
+    params$FOREST,
+    " | PB Piedmont';",
+    "</script>"
+  )
+)
+```
+
+
 ```{r data, include=FALSE}
-# ---- Find BlueSky output server and burn location ----
-serv1_link <- paste0("https://playground-1.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
-serv2_link <- paste0("https://playground-2.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
-serv_links_ls <- list(serv1_link = serv1_link, serv2_link = serv2_link)
+# ---- Burn location ----
+# The smoke-report workflow can provide a BlueSky RUN_ID and pull the burn
+# location from fire_locations.csv. The standalone PB Piedmont workflow can
+# provide BURN_LAT/BURN_LON directly and does not require a BlueSky run.
+run_id_available <- (
+  !is.null(params$RUN_ID) &&
+    !is.na(params$RUN_ID) &&
+    nzchar(as.character(params$RUN_ID))
+)
 
-date_info_1 <- if (RCurl::url.exists(serv1_link)) {
-  tibble(
-    server = "serv1_link",
-    end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv1_link, "/output.json"))$runtime[["end"]])
+manual_location_available <- (
+  !is.null(params$BURN_LAT) &&
+    !is.na(params$BURN_LAT) &&
+    !is.null(params$BURN_LON) &&
+    !is.na(params$BURN_LON)
+)
+
+if (manual_location_available) {
+
+  burn_info <- tibble(
+    lat = as.numeric(params$BURN_LAT),
+    lon = as.numeric(params$BURN_LON),
+    utc_offset = NA_character_,
+    date_time = NA_character_,
+    date = as.Date(NA)
   )
+
+} else if (run_id_available) {
+
+  serv1_link <- paste0("https://playground-1.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
+  serv2_link <- paste0("https://playground-2.airfire.org/bluesky-web-output/", params$RUN_ID, "-dispersion")
+  serv_links_ls <- list(serv1_link = serv1_link, serv2_link = serv2_link)
+
+  date_info_1 <- if (RCurl::url.exists(serv1_link)) {
+    tibble(
+      server = "serv1_link",
+      end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv1_link, "/output.json"))$runtime[["end"]])
+    )
+  } else {
+    tibble(server = NA_character_, end_time = as.POSIXct(NA))
+  }
+
+  date_info_2 <- if (RCurl::url.exists(serv2_link)) {
+    tibble(
+      server = "serv2_link",
+      end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv2_link, "/output.json"))$runtime[["end"]])
+    )
+  } else {
+    tibble(server = NA_character_, end_time = as.POSIXct(NA))
+  }
+
+  recent_server <- bind_rows(date_info_1, date_info_2) %>%
+    filter(!is.na(server)) %>%
+    arrange(desc(end_time)) %>%
+    slice(1) %>%
+    pull(server)
+
+  if (length(recent_server) == 0 || is.na(recent_server)) {
+    stop("Unable to find BlueSky output for RUN_ID, and no manual burn lat/lon was provided.")
+  }
+
+  results_output_link <- serv_links_ls[[recent_server]]
+
+  burn_info <- read.csv(paste0(results_output_link, "/output/data/fire_locations.csv")) %>%
+    dplyr::select(lat = latitude, lon = longitude, utc_offset, date_time) %>%
+    mutate(date = lubridate::as_date(lubridate::ymd(date_time)))
+
 } else {
-  tibble(server = NA_character_, end_time = as.POSIXct(NA))
+  stop("PB Piedmont map requires either BURN_LAT/BURN_LON or a valid RUN_ID.")
 }
 
-date_info_2 <- if (RCurl::url.exists(serv2_link)) {
-  tibble(
-    server = "serv2_link",
-    end_time = lubridate::as_datetime(rjson::fromJSON(file = paste0(serv2_link, "/output.json"))$runtime[["end"]])
-  )
-} else {
-  tibble(server = NA_character_, end_time = as.POSIXct(NA))
-}
-
-recent_server <- bind_rows(date_info_1, date_info_2) %>%
-  filter(!is.na(server)) %>%
-  arrange(desc(end_time)) %>%
-  slice(1) %>%
-  pull(server)
-
-results_output_link <- serv_links_ls[[recent_server]]
-
-burn_info <- read.csv(paste0(results_output_link, "/output/data/fire_locations.csv")) %>%
-  dplyr::select(lat = latitude, lon = longitude, utc_offset, date_time) %>%
-  mutate(date = lubridate::as_date(lubridate::ymd(date_time)))
-
-burn_tz <- lutz::tz_lookup_coords(
-  lat = burn_info$lat[1],
-  lon = burn_info$lon[1],
-  method = "fast"
+burn_tz <- tryCatch(
+  lutz::tz_lookup_coords(
+    lat = burn_info$lat[1],
+    lon = burn_info$lon[1],
+    method = "fast"
+  ),
+  error = function(e) NA_character_
 )
 
 burn_date <- burn_info$date[1]
@@ -158,7 +215,15 @@ map_date_label <- if (!all(is.na(params$BURN_DATE))) {
   paste0(format(min(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"), " to ", format(max(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"))
 }
 
-map_title <- paste0("PB Piedmont Output for ", params$BURN_NAME, " [", map_date_label, "]")
+map_title <- paste0(
+  "PB Piedmont Output for ",
+  params$BURN_NAME,
+  " • ",
+  params$FOREST,
+  " [",
+  map_date_label,
+  "]"
+)
 
 caution_html <- HTML("Please note: for internal use only.<br>Do not distribute outside of USFS.")
 ```
