@@ -130,6 +130,13 @@ burn_tz <- tryCatch(
   error = function(e) NA_character_
 )
 
+# PB Piedmont filenames are UTC. Convert them to the burn-local timezone
+# determined from the burn coordinates. If timezone lookup fails, keep UTC
+# rather than stopping report generation.
+if (is.na(burn_tz) || !nzchar(burn_tz)) {
+  burn_tz <- "UTC"
+}
+
 burn_date <- burn_info$date[1]
 
 fire_icon_uri <- if (file.exists("red-fire-flame.png")) {
@@ -139,9 +146,9 @@ fire_icon_uri <- if (file.exists("red-fire-flame.png")) {
 }
 
 # ---- Unzip and index PB Piedmont hourly files ----
-# IMPORTANT: PB Piedmont hourly filenames are treated as the source of truth.
-# Do not convert the filename time into a timezone-aware datetime. The map labels,
-# ordering, and filtering below use exactly the date/time text listed in each .txt filename.
+# IMPORTANT: PB Piedmont hourly filenames are UTC timestamps.
+# The filenames remain the source of truth for ordering, but slider labels
+# are converted from UTC into the burn-local timezone determined above.
 stopifnot(!is.null(params$PB_HOURLY_ZIP), file.exists(params$PB_HOURLY_ZIP))
 
 pb_hourly_dir <- tempfile("pb_hourly_")
@@ -161,25 +168,32 @@ pb_file_index <- tibble(file = pb_txt_files) %>%
     filename_stamp = stringr::str_remove(file_name, "\\.txt$"),
     file_date_text = stringr::str_extract(filename_stamp, "^[0-9]{2}[A-Za-z]{3}[0-9]{4}"),
     file_time_text = stringr::str_extract(filename_stamp, "[0-9]{4}$"),
-    file_date = as.Date(stringr::str_to_title(file_date_text), format = "%d%b%Y"),
-    file_hour = as.integer(substr(file_time_text, 1, 2)),
-    file_minute = as.integer(substr(file_time_text, 3, 4)),
-    file_minutes = file_hour * 60 + file_minute,
-    file_time_label = paste0(substr(file_time_text, 1, 2), ":", substr(file_time_text, 3, 4)),
-    display_label = paste0(format(file_date, "%b %d, %Y"), " ", file_time_label)
-  ) %>%
-  filter(
-    !is.na(file_date),
-    !is.na(file_time_text),
-    file_time_text >= "0000",
-    file_time_text <= "2359"
-  ) %>%
-  arrange(file_date, file_time_text)
 
-# No time-window filtering here.
-# PB Piedmont filename timestamps are treated as the source of truth and are
-# used exactly as listed in each .txt filename. This keeps the slider order and
-# labels aligned with the uploaded files and avoids timezone conversion issues.
+    # Parse the filename timestamp as UTC.
+    file_datetime_utc = as.POSIXct(
+      stringr::str_to_title(filename_stamp),
+      format = "%d%b%Y_%H%M",
+      tz = "UTC"
+    ),
+
+    # Convert UTC filename timestamp to local burn timezone for display.
+    file_datetime_local = lubridate::with_tz(file_datetime_utc, tzone = burn_tz),
+
+    file_date_utc = as.Date(file_datetime_utc),
+    file_date_local = as.Date(file_datetime_local),
+    utc_time_label = format(file_datetime_utc, "%H:%M UTC"),
+    local_time_label = format(file_datetime_local, "%H:%M %Z"),
+    display_label = paste0(
+      format(file_datetime_local, "%b %d, %Y"),
+      " ",
+      local_time_label
+    )
+  ) %>%
+  filter(!is.na(file_datetime_utc)) %>%
+  arrange(file_datetime_utc)
+
+# No time-window filtering here. Include every hourly .txt file in the ZIP.
+# Ordering is by UTC filename timestamp; display labels are burn-local time.
 pb_file_index_window <- pb_file_index
 
 if (nrow(pb_file_index_window) == 0) {
@@ -212,7 +226,13 @@ pb_group_names <- paste0("pb-hour-", seq_along(pb_layers))
 map_date_label <- if (!all(is.na(params$BURN_DATE))) {
   as.character(params$BURN_DATE)
 } else {
-  paste0(format(min(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"), " to ", format(max(pb_file_index_window$file_date, na.rm = TRUE), "%Y-%m-%d"))
+  paste0(
+    format(min(pb_file_index_window$file_date_local, na.rm = TRUE), "%Y-%m-%d"),
+    " to ",
+    format(max(pb_file_index_window$file_date_local, na.rm = TRUE), "%Y-%m-%d"),
+    " ",
+    burn_tz
+  )
 }
 
 map_title <- paste0(
