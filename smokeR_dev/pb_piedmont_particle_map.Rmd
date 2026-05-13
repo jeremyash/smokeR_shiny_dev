@@ -34,21 +34,6 @@ library(jsonlite)
 ```
 
 
-```{r title, results='asis', echo=FALSE}
-cat(
-  paste0(
-    "<script>",
-    "document.title = '",
-    params$BURN_NAME,
-    " • ",
-    params$FOREST,
-    " | PB Piedmont';",
-    "</script>"
-  )
-)
-```
-
-
 ```{r data, include=FALSE}
 # ---- Burn location ----
 # The smoke-report workflow can provide a BlueSky RUN_ID and pull the burn
@@ -145,6 +130,14 @@ fire_icon_uri <- if (file.exists("red-fire-flame.png")) {
   "https://raw.githubusercontent.com/jeremyash/icons/main/redFlame.png"
 }
 
+pb_icon_uri <- if (file.exists("www/pb_fog_icon.svg")) {
+  base64enc::dataURI(file = "www/pb_fog_icon.svg", mime = "image/svg+xml")
+} else if (file.exists("pb_fog_icon.svg")) {
+  base64enc::dataURI(file = "pb_fog_icon.svg", mime = "image/svg+xml")
+} else {
+  "pb_fog_icon.svg"
+}
+
 # ---- Unzip and index PB Piedmont hourly files ----
 # IMPORTANT: PB Piedmont hourly filenames are UTC timestamps.
 # The filenames remain the source of truth for ordering, but slider labels
@@ -226,13 +219,7 @@ pb_group_names <- paste0("pb-hour-", seq_along(pb_layers))
 map_date_label <- if (!all(is.na(params$BURN_DATE))) {
   as.character(params$BURN_DATE)
 } else {
-  paste0(
-    format(min(pb_file_index_window$file_date_local, na.rm = TRUE), "%Y-%m-%d"),
-    " to ",
-    format(max(pb_file_index_window$file_date_local, na.rm = TRUE), "%Y-%m-%d"),
-    " ",
-    burn_tz
-  )
+  format(min(pb_file_index_window$file_date_local, na.rm = TRUE), "%Y-%m-%d")
 }
 
 map_title <- paste0(
@@ -248,6 +235,7 @@ map_title <- paste0(
 caution_html <- HTML("Please note: for internal use only.<br>Do not distribute outside of USFS.")
 ```
 
+
 <style>
 body {
   margin: 0;
@@ -261,16 +249,61 @@ body {
 }
 
 h1.title {
+  display: none;
+}
+
+.pb-header-banner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
   margin: 0;
-  padding: 10px 18px;
-  font-size: 22px;
-  background: #f8f8f8;
-  border-bottom: 1px solid #ddd;
+  padding: 18px 24px;
+  background: linear-gradient(90deg, #032B5B 0%, #0B3D73 100%);
+  border-bottom: 5px solid #F28C28;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+}
+
+.pb-header-banner img {
+  width: 78px;
+  height: 78px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.96);
+  padding: 6px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+}
+
+.pb-header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.pb-header-main {
+  color: white;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.pb-header-sub {
+  color: rgba(255,255,255,0.88);
+  font-size: 18px;
+  margin-top: 6px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.pb-header-date {
+  color: rgba(255,255,255,0.78);
+  font-size: 15px;
+  margin-top: 5px;
+  line-height: 1.25;
 }
 
 .leaflet-container {
   width: 100% !important;
-  height: calc(100vh - 58px) !important;
+  height: calc(100vh - 125px) !important;
 }
 
 .leaflet-control.map-title {
@@ -333,19 +366,41 @@ h1.title {
 }
 </style>
 
-```{r update_browser_title, results='asis', echo=FALSE}
+```{r pb_browser_title, results='asis', echo=FALSE}
 cat(
   paste0(
     "<script>",
     "document.addEventListener('DOMContentLoaded', function() {",
-    "  document.title = ", jsonlite::toJSON(map_title, auto_unbox = TRUE), ";",
-    "  var h1 = document.querySelector('h1.title');",
-    "  if (h1) h1.textContent = ", jsonlite::toJSON(map_title, auto_unbox = TRUE), ";",
+    "document.title = ",
+    jsonlite::toJSON(map_title, auto_unbox = TRUE),
+    ";",
     "});",
     "</script>"
   )
 )
 ```
+
+```{r pb_banner, results='asis', echo=FALSE}
+cat(
+  paste0(
+    "<div class='pb-header-banner'>",
+      "<img src='", pb_icon_uri, "' alt='PB Piedmont Fog Icon'>",
+      "<div class='pb-header-text'>",
+        "<div class='pb-header-main'>",
+          htmltools::htmlEscape(params$BURN_NAME),
+          " • ",
+          htmltools::htmlEscape(params$FOREST),
+        "</div>",
+        "<div class='pb-header-sub'>PB Piedmont Output</div>",
+        "<div class='pb-header-date'>",
+          htmltools::htmlEscape(map_date_label),
+        "</div>",
+      "</div>",
+    "</div>"
+  )
+)
+```
+
 
 ```{r map, out.width='100%'}
 # Build a deterministic one-hour-at-a-time canvas map.
@@ -368,7 +423,7 @@ pb_hour_payload <- purrr::map(
 )
 
 pb_map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
-  addProviderTiles(providers$CartoDB.Voyager, group = "Street") %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Street") %>%
   addProviderTiles("Esri.WorldImagery", group = "Terrain") %>%
   fitBounds(
     lng1 = min(pb_all$longitude, na.rm = TRUE),
