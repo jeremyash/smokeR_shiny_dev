@@ -502,7 +502,7 @@ pb_map %>%
           var p = getPoint(pts, i);
           L.circleMarker([p.latitude, p.longitude], {
             renderer: canvasRenderer,
-            radius: 5,
+            radius: 3.5,
             stroke: false,
             fill: true,
             fillColor: p.color,
