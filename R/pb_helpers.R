@@ -40,7 +40,6 @@ create_pb_piedmont_map <- function(
   
   rmarkdown::render(
     input = here::here(
-      "smokeR_dev",
       "templates",
       "pb_piedmont_particle_map.Rmd"
     ),

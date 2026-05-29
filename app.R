@@ -31,7 +31,7 @@ source("R/constants.R")
 LOG_SHEET_URL <- get_log_sheet_url()
 
 nfs_raw <- readRDS(
-  here::here("smokeR_dev", "data", "usfs_unit_list.RDS")
+  here::here("data", "usfs_unit_list.RDS")
 )
 
 if (!all(c("region", "forests") %in% names(nfs_raw))) {
@@ -644,7 +644,6 @@ server <- function(input, output, session) {
         
         rmarkdown::render(
           input = here::here(
-            "smokeR_dev",
             "templates",
             "smoke_template_shiny_dev_external_pb_map.Rmd"
           ),

@@ -72,19 +72,19 @@ download_data_uri <- function(url, mime = "image/png") {
 }
 
 fire_icon_uri <- make_data_uri(
-  here::here("smokeR_dev", "assets", "red-fire-flame.png")
+  here::here("assets", "red-fire-flame.png")
 )
 
 fwd_img_uri <- make_data_uri(
-  here::here("smokeR_dev", "assets", "fwd.png")
+  here::here("assets", "fwd.png")
 )
 
 fasm_img_uri <- make_data_uri(
-  here::here("smokeR_dev", "assets", "fasm.png")
+  here::here("assets", "fasm.png")
 )
 
 report_icon_uri <- make_data_uri(
-  here::here("smokeR_dev", "www", "favicon_512x512_rounded.png")
+  here::here("www", "favicon_512x512_rounded.png")
 )
 
 perm_mon_icon_uri <- download_data_uri(
@@ -740,7 +740,7 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps s
 
 # census data
 pop <- readRDS(
-  here::here("smokeR_dev", "data", "population_aggregate_factor.rds")
+  here::here("data", "population_aggregate_factor.rds")
 )
 
 

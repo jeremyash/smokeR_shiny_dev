@@ -126,7 +126,6 @@ if (is.na(burn_tz) || !nzchar(burn_tz)) {
 burn_date <- burn_info$date[1]
 
 fire_icon_file <- here::here(
-  "smokeR_dev",
   "assets",
   "red-fire-flame.png"
 )
@@ -141,7 +140,6 @@ fire_icon_uri <- if (file.exists(fire_icon_file)) {
 }
 
 pb_icon_file <- here::here(
-  "smokeR_dev",
   "www",
   "pb_fog_icon.svg"
 )
