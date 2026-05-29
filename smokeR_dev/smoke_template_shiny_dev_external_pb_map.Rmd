@@ -1,5 +1,5 @@
 ---
-title: ""
+title: "Smoke Report for `r params$BURN_NAME` Prescribed Fire, `r params$FOREST`"
 output:
   html_document: 
     toc: TRUE
@@ -20,41 +20,9 @@ params:
   HOURLY_MAP_SELECT: NA 
   FORECAST_AQI_SELECT: NA
   SUPERFOG_SCREEN_SELECT: NA
+  REPORT_URL: NA
   PB_MAP_URL: NA
 ---
-
-```{r title_banner, results='asis', echo=FALSE}
-cat(
-  paste0(
-    '<div class="report-title-banner">',
-      '<img src="www/favicon_512x512_rounded.png" alt="Smoke Report Icon">',
-      '<div class="report-title-text">',
-        '<div class="report-title-main">',
-          params$BURN_NAME,
-          ' • ',
-          params$FOREST,
-        '</div>',
-        '<div class="report-title-sub">',
-          'Prescribed Fire Smoke Report',
-        '</div>',
-      '</div>',
-    '</div>'
-  )
-)
-
-cat(
-  paste0(
-    "<script>",
-    "document.title = '",
-    params$BURN_NAME,
-    " • ",
-    params$FOREST,
-    " | Smoke Report';",
-    "</script>"
-  )
-)
-```
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -70,7 +38,6 @@ library(terra)
 library(sf)
 library(kableExtra)
 library(leaflet)
-library(leafgl)
 library(rvest)
 # library(googlesheets4)
 library(lutz)
@@ -444,33 +411,14 @@ forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI fo
                                                                       ".**",
                                                                       sep = "")} else{""}
 
-
-# check to make sure the pb url is active
-pb_map_url_available <- !is.null(params$PB_MAP_URL) &&
-  !is.na(params$PB_MAP_URL) &&
-  nzchar(params$PB_MAP_URL) &&
-  grepl("^https?://", params$PB_MAP_URL)
-
-
 # superfog statement
-superfog_sen <- ifelse(
-  burn_info$region == "08",
-  ifelse(
-    params$SUPERFOG_SCREEN_SELECT == "Yes",
-    ifelse(
-      pb_map_url_available,
-      paste0(
-        "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
-        "Please visit ",
-        "<a href='", params$PB_MAP_URL, "' target='_blank'>PB Piedmont Output</a>",
-        " to view results displaying nighttime smoke dispersion and areas with elevated chances of superfog formation."
-      ),
-      "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation."
-    ),
-    "The spot weather forecast indicates there is not potential for superfog formation in the overnight hours."
-  ),
-  ""
-)
+superfog_sen <- ifelse(burn_info$region == "08",
+                       ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
+                              "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.",
+                              "The spot weather forecast indicates there is not potential for superfog formation in the overnight hours."),
+                       "")
+
+
 
 ```
 
@@ -1060,13 +1008,11 @@ avg_leaflet <- avg_leaflet %>%
         [data.ymax, data.xmax]
       ];
 
-      var smokeOverlay = L.imageOverlay(data.url, bounds, {
+      L.imageOverlay(data.url, bounds, {
         opacity: 1,
         pane: 'smoke_map',
         className: 'png-raster-overlay'
-      });
-
-      map.layerManager.addLayer(smokeOverlay, 'overlay', 'Smoke');
+      }).addTo(map);
     }
     ",
     data = list(
@@ -1084,10 +1030,7 @@ avg_leaflet <- avg_leaflet %>%
 # generate leaflet map for visual range
 vis_leaflet <- leaflet() %>% 
   
-  addProviderTiles(providers$CartoDB.Voyager,
-                   group = "Street") %>% 
-  addProviderTiles("Esri.WorldImagery",
-                   group = "Terrain") %>% 
+addProviderTiles(providers$CartoDB.Voyager) %>% 
   
   addLegend(
     position = "topright",
@@ -1111,10 +1054,6 @@ vis_leaflet <- leaflet() %>%
             lat1 = burn_icon$y - 0.5,
             lng2 = burn_icon$x + 0.5,
             lat2 = burn_icon$y + 0.5) %>% 
-  addLayersControl(
-    baseGroups = c("Street", "Terrain"),
-    options = layersControlOptions(collapsed = FALSE)
-  ) %>%
   addScaleBar(position = "bottomright")
 
 vis_leaflet <- vis_leaflet %>%
@@ -1152,10 +1091,7 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
   )
 
   hourly_leaflet <- leaflet() %>%
-    addProviderTiles(providers$CartoDB.Voyager,
-                     group = "Street") %>%
-    addProviderTiles("Esri.WorldImagery",
-                     group = "Terrain") %>%
+    addProviderTiles(providers$CartoDB.Voyager) %>%
     addMapPane("hourly_smoke_map", zIndex = 460) %>%
     addMapPane("hourly_marker_map", zIndex = 700) %>%
     addLegend(
@@ -1169,10 +1105,6 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
       lat1 = burn_icon$y - 0.5,
       lng2 = burn_icon$x + 0.5,
       lat2 = burn_icon$y + 0.5
-    ) %>%
-    addLayersControl(
-      baseGroups = c("Street", "Terrain"),
-      options = layersControlOptions(collapsed = FALSE)
     ) %>%
     addScaleBar(position = "bottomright")
   
@@ -1296,7 +1228,6 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
 }
 
 
-
 # remove smoke dispersion files from directory
 unlink(outlook_path,
        recursive = TRUE)
@@ -1310,8 +1241,8 @@ The average daily smoke conditions are helpful for concerns related to public he
 avg_leaflet
 ```
 
-### Maximum Hourly Impact to Visual Range
 
+### Maximum Hourly Impact to Visual Range
 
 The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other sensitive areas.
 
@@ -1339,7 +1270,6 @@ if (params$REGION == "08") {
 
 
 ## Meteorological and Air Quality Conditions
-
 
 The Fire Weather Dashboard link below shows predicted fire weather for the area. The Fire and Smoke Map shows air quality conditions and is a valuable resource for monitoring smoke impacts throughout the day.
 
@@ -1441,55 +1371,51 @@ cat(
 
 ```{r smoke_report_logs, include = FALSE, echo = FALSE, message = FALSE}
 
-# tryCatch(
-#     expr = {
-#       # set up authentication to write to google sheet
-#       googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-#       gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-#       
-#       # log sheet location
-#       log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
-#       
-#       # superfog data to log
-#       superfog_log <- ifelse(burn_info$region == "08",
-#                              ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
-#                                     "Yes",
-#                                     "No"),
-#                              NA)
-#       
-#       # data before or of burn to log
-#       day_log <- ifelse(burn_info$region == "09",
-#                              ifelse(params$DAY_BEFORE_OF_SELECT == "Day before",
-#                                     "Day before",
-#                                     "Day of"),
-#                              NA)
-#       
-#       
-#       # data to log
-#       model_run_df <- data.frame(
-#         "Region" = burn_region,            
-#         "Forest" = params$FOREST,          
-#         "Burn Unit" = params$BURN_NAME,       
-#         "Burn Date" = burn_info$date,
-#         "Date Issued" = Sys.Date(), 
-#         "Latitude" = burn_info$lat,        
-#         "Longitude" = burn_info$lon,        
-#         "Acreage" = burn_info$acres,         
-#         "PG Link" = bsky_link,          
-#         "Superfog Potential" = superfog_log,         
-#         "Day before or of" = day_log
-#       )
-#       
-#       
-#       # write data to google sheets log
-#       sheet_append(log_url, model_run_df, sheet = 1)
-#     },
-#     
-#     error = function(e) {
-#       logger.error("FAILED TO WRITE DATA TO GOOGLE SHEETS")
-#       logger.error(e)
-#       return(NULL) 
-#     }
-#   )
+tryCatch(
+    expr = {
+      # set up authentication to write to google sheet
+      googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+      googlesheets4::gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+
+      # log sheet location
+      log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
+
+      # superfog data to log
+      superfog_log <- ifelse(burn_info$region == "08",
+                             ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
+                                    "Yes",
+                                    "No"),
+                             NA)
+
+
+      # data to log
+      model_run_df <- data.frame(
+        "Region" = burn_region,
+        "Forest" = params$FOREST,
+        "Burn Unit" = params$BURN_NAME,
+        "Burn Date" = burn_info$date,
+        "Date Issued" = Sys.Date(),
+        "Latitude" = burn_info$lat,
+        "Longitude" = burn_info$lon,
+        "Acreage" = burn_info$acres,
+        "PG Link" = bsky_link,
+        "Superfog Potential" = superfog_log,
+        "Smoke Report Link" = params$REPORT_URL,
+        "PB Piedmont Map Link" = params$PB_MAP_URL,
+        "Report Type" = "Smoke Report",
+        check.names = FALSE
+      )
+
+
+      # write data to google sheets log
+      googlesheets4::sheet_append(log_url, model_run_df, sheet = 1)
+    },
+
+    error = function(e) {
+      logger.error("FAILED TO WRITE DATA TO GOOGLE SHEETS")
+      logger.error(e)
+      return(NULL)
+    }
+  )
 
 ```

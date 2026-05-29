@@ -135,6 +135,60 @@ upload_report_to_github_pages <- function(
   }
 }
 
+
+make_github_pages_url <- function(owner, repo, pages_dir, report_filename) {
+  pages_url_dir <- pages_dir %>%
+    stringr::str_replace("^docs/?", "") %>%
+    stringr::str_replace_all("^/|/$", "")
+  
+  if (nzchar(pages_url_dir)) {
+    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
+  } else {
+    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
+  }
+}
+
+log_standalone_pb_piedmont_map <- function(
+    region,
+    forest,
+    burn_unit,
+    latitude,
+    longitude,
+    pb_map_url
+) {
+  tryCatch(
+    expr = {
+      googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+      googlesheets4::gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+      
+      log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
+      
+      model_run_df <- data.frame(
+        "Region" = region,
+        "Forest" = forest,
+        "Burn Unit" = burn_unit,
+        "Burn Date" = as.Date(NA),
+        "Date Issued" = Sys.Date(),
+        "Latitude" = latitude,
+        "Longitude" = longitude,
+        "Acreage" = NA_real_,
+        "PG Link" = NA_character_,
+        "Superfog Potential" = NA_character_,
+        "Smoke Report Link" = NA_character_,
+        "PB Piedmont Map Link" = pb_map_url,
+        "Report Type" = "Standalone PB Piedmont Map",
+        check.names = FALSE
+      )
+      
+      googlesheets4::sheet_append(log_url, model_run_df, sheet = 1)
+    },
+    error = function(e) {
+      message("FAILED TO WRITE STANDALONE PB PIEDMONT MAP LOG TO GOOGLE SHEETS: ", conditionMessage(e))
+      return(NULL)
+    }
+  )
+}
+
 update_index_page <- function(
     owner,
     repo,
@@ -843,7 +897,18 @@ server <- function(input, output, session) {
       
       pb_only_map_link(pb_url)
       
-      incProgress(0.10, detail = "PB Piedmont map ready")
+      incProgress(0.05, detail = "Logging PB Piedmont map")
+      
+      log_standalone_pb_piedmont_map(
+        region = "08",
+        forest = input$PB_ONLY_FOREST,
+        burn_unit = input$PB_ONLY_BURN_NAME,
+        latitude = input$PB_ONLY_LAT,
+        longitude = input$PB_ONLY_LON,
+        pb_map_url = pb_url
+      )
+      
+      incProgress(0.05, detail = "PB Piedmont map ready")
     })
   })
   
@@ -869,6 +934,7 @@ server <- function(input, output, session) {
           HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
           FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
           SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL,
+          REPORT_URL = NULL,
           PB_MAP_URL = NULL
         )
         
@@ -894,6 +960,15 @@ server <- function(input, output, session) {
         )
         
         rendered_file <- file.path(tempdir(), report_filename)
+        
+        report_url <- make_github_pages_url(
+          owner = "jeremyash",
+          repo = "smoke_reports",
+          pages_dir = "docs/reports",
+          report_filename = report_filename
+        )
+        
+        params_ls$REPORT_URL <- report_url
         
         # If a PB Piedmont hourly ZIP was uploaded, render it as a separate
         # standalone HTML file and upload that heavier map to its own GitHub Pages directory.

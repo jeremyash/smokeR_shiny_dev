@@ -1369,55 +1369,47 @@ cat(
 
 ```{r smoke_report_logs, include = FALSE, echo = FALSE, message = FALSE}
 
-# tryCatch(
-#     expr = {
-#       # set up authentication to write to google sheet
-#       googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-#       gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-#       
-#       # log sheet location
-#       log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
-#       
-#       # superfog data to log
-#       superfog_log <- ifelse(burn_info$region == "08",
-#                              ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
-#                                     "Yes",
-#                                     "No"),
-#                              NA)
-#       
-#       # data before or of burn to log
-#       day_log <- ifelse(burn_info$region == "09",
-#                              ifelse(params$DAY_BEFORE_OF_SELECT == "Day before",
-#                                     "Day before",
-#                                     "Day of"),
-#                              NA)
-#       
-#       
-#       # data to log
-#       model_run_df <- data.frame(
-#         "Region" = burn_region,            
-#         "Forest" = params$FOREST,          
-#         "Burn Unit" = params$BURN_NAME,       
-#         "Burn Date" = burn_info$date,
-#         "Date Issued" = Sys.Date(), 
-#         "Latitude" = burn_info$lat,        
-#         "Longitude" = burn_info$lon,        
-#         "Acreage" = burn_info$acres,         
-#         "PG Link" = bsky_link,          
-#         "Superfog Potential" = superfog_log,         
-#         "Day before or of" = day_log
-#       )
-#       
-#       
-#       # write data to google sheets log
-#       sheet_append(log_url, model_run_df, sheet = 1)
-#     },
-#     
-#     error = function(e) {
-#       logger.error("FAILED TO WRITE DATA TO GOOGLE SHEETS")
-#       logger.error(e)
-#       return(NULL) 
-#     }
-#   )
+tryCatch(
+    expr = {
+      # set up authentication to write to google sheet
+      googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+      gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
+
+      # log sheet location
+      log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
+
+      # superfog data to log
+      superfog_log <- ifelse(burn_info$region == "08",
+                             ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
+                                    "Yes",
+                                    "No"),
+                             NA)
+
+
+      # data to log
+      model_run_df <- data.frame(
+        "Region" = burn_region,
+        "Forest" = params$FOREST,
+        "Burn Unit" = params$BURN_NAME,
+        "Burn Date" = burn_info$date,
+        "Date Issued" = Sys.Date(),
+        "Latitude" = burn_info$lat,
+        "Longitude" = burn_info$lon,
+        "Acreage" = burn_info$acres,
+        "PG Link" = bsky_link,
+        "Superfog Potential" = superfog_log
+      )
+
+
+      # write data to google sheets log
+      sheet_append(log_url, model_run_df, sheet = 1)
+    },
+
+    error = function(e) {
+      logger.error("FAILED TO WRITE DATA TO GOOGLE SHEETS")
+      logger.error(e)
+      return(NULL)
+    }
+  )
 
 ```
