@@ -726,7 +726,7 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps s
 ## READ IN POP DATA ----------------------------------------------
 
 # census data
-pop <- readRDS("population_aggregate_factor.rds") 
+pop <- readRDS("data/population_aggregate_factor.rds") 
 
 
 ## DOWNLOAD PNG MAP IMAGES AND GRID INFO ----------------------------------------------

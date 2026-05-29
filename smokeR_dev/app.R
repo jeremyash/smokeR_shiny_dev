@@ -28,7 +28,7 @@ source("R/pb_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
-nfs_raw <- readRDS("usfs_unit_list.RDS")
+nfs_raw <- readRDS("data/usfs_unit_list.RDS")
 
 if (!all(c("region", "forests") %in% names(nfs_raw))) {
   stop("usfs_unit_list.RDS must contain columns named 'region' and 'forests'.")
