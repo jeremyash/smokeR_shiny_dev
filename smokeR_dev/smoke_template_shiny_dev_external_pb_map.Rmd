@@ -1,5 +1,5 @@
 ---
-title: "Smoke Report for `r params$BURN_NAME` Prescribed Fire, `r params$FOREST`"
+title: ""
 output:
   html_document: 
     toc: TRUE
@@ -460,8 +460,27 @@ superfog_sen <- if (burn_info$region == "08") {
 
 ```
 
-<div class="report-issued">`r generated_at_sen`</div>
+```{r title_banner, results='asis', echo=FALSE}
+cat(
+  paste0(
+    '<div class="report-title-banner">',
+      '<img src="www/favicon_512x512_rounded.png" alt="Smoke Report Icon">',
+      '<div class="report-title-text">',
+        '<div class="report-title-main">',
+          params$BURN_NAME,
+          ' • ',
+          params$FOREST,
+        '</div>',
+        '<div class="report-title-sub">',
+          'Prescribed Fire Smoke Report',
+        '</div>',
+      '</div>',
+    '</div>'
+  )
+)
+```
 
+<div class="report-issued">`r generated_at_sen`</div>
 
 ```{=html}
 <div class="fire_info_wrapper">

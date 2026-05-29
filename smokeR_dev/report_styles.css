@@ -265,7 +265,9 @@ body .main-container {
   align-items: center;
   gap: 18px;
 
+  margin-top: 16px;
   margin-bottom: 22px;
+
   padding: 18px 22px;
 
   background: linear-gradient(90deg, #032B5B 0%, #0B3D73 100%);
@@ -325,5 +327,14 @@ h3 {
   border-left: 6px solid #F28C28;
   border-radius: 6px;
   font-size: 20px;
+  font-weight: 700;
+}
+
+.report-issued {
+  margin-top: -8px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  color: #555555;
+  font-style: normal;
   font-weight: 700;
 }

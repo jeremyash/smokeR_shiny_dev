@@ -287,7 +287,22 @@ ui <- fluidPage(
             "Smoke Report",
             
             tags$div(class = "app-section-title", "Burn information"),
-            selectInput("REGION", "USFS Region", choices = c("02", "04", "06", "08", "09")),
+            selectInput(
+              "REGION",
+              "USFS Region",
+              choices = c(
+                "Select a Region" = "",
+                "02",
+                "03",
+                "04",
+                "05",
+                "06",
+                "08",
+                "09",
+                "10"
+              ),
+              selected = ""
+            ),
             uiOutput("FOREST"),
             textInput("BURN_NAME", "Name of burn unit"),
             
@@ -427,7 +442,7 @@ server <- function(input, output, session) {
   
   # subset Forest names based on Region; start blank so the right panel stays empty initially
   output$FOREST <- renderUI({
-    req(input$REGION)
+    req(nzchar(input$REGION))
     
     forest_choices <- nfs %>%
       dplyr::filter(region == input$REGION) %>%
@@ -617,6 +632,17 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       
+      req(nzchar(input$REGION))
+      req(nzchar(input$REGION))
+      req(nzchar(input$FOREST))
+      req(nzchar(input$BURN_NAME))
+      req(nzchar(input$RUN_ID))
+      
+      if (input$REGION == "08") {
+        req(input$FORECAST_AQI_SELECT)
+        req(input$SUPERFOG_SCREEN_SELECT)
+      }
+      
       withProgress(message = "Generating smoke report...", value = 0, {
         
         incProgress(0.10, detail = "Preparing report parameters")
@@ -645,18 +671,6 @@ server <- function(input, output, session) {
           REPORT_URL = NULL,
           PB_MAP_URL = NULL
         )
-        
-        burn_name_for_file <- input$BURN_NAME %>%
-          as.character() %>%
-          safe_filename()
-        
-        forest_for_file <- input$FOREST %>%
-          as.character() %>%
-          safe_filename()
-        
-        forest_short_for_file <- input$FOREST %>%
-          as.character() %>%
-          short_forest_name()
         
         report_filename <- make_report_filename(
           burn_name = input$BURN_NAME,
