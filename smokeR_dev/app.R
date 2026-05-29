@@ -14,6 +14,7 @@ library(gh)
 library(base64enc)
 library(fs)
 require(digest)
+require(shinyjs)
 
 
 # LOAD DATA ----------------------------------------------
@@ -66,6 +67,8 @@ aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-We
 
 
 ui <- fluidPage(
+  shinyjs::useShinyjs(),
+
   tags$title("Prescribed Fire Smoke Report"),
   
   tags$head(
@@ -332,6 +335,7 @@ ui <- fluidPage(
             textInput("PHONE", "Your phone number (optional)"),
             
             tags$div(class = "app-section-title", "Downloads"),
+            uiOutput("report_required_msg"),
             downloadButton("report", "Download Smoke Report"),
             downloadButton("kmz", "Download Google Earth File")
           ),
@@ -404,6 +408,67 @@ server <- function(input, output, session) {
   # github pages links
   report_link <- reactiveVal(NULL)
   pb_only_map_link <- reactiveVal(NULL)
+  
+  # download report only appears when fields are inputted
+  report_ready <- reactive({
+    base_ready <- all(
+      nzchar(input$REGION %||% ""),
+      nzchar(input$FOREST %||% ""),
+      nzchar(input$BURN_NAME %||% ""),
+      nzchar(input$RUN_ID %||% ""),
+      nzchar(input$HOURLY_MAP_SELECT %||% "")
+    )
+    
+    r8_ready <- TRUE
+    
+    if (identical(input$REGION, "08")) {
+      r8_ready <- all(
+        nzchar(input$FORECAST_AQI_SELECT %||% ""),
+        nzchar(input$SUPERFOG_SCREEN_SELECT %||% "")
+      )
+    }
+    
+    base_ready && r8_ready
+  })
+  
+  observe({
+    if (isTRUE(report_ready())) {
+      shinyjs::enable("report")
+    } else {
+      shinyjs::disable("report")
+    }
+  })
+  
+  output$report_required_msg <- renderUI({
+    missing <- c()
+    
+    if (!nzchar(input$REGION %||% "")) missing <- c(missing, "USFS Region")
+    if (!nzchar(input$FOREST %||% "")) missing <- c(missing, "Forest")
+    if (!nzchar(input$BURN_NAME %||% "")) missing <- c(missing, "Burn unit name")
+    if (!nzchar(input$RUN_ID %||% "")) missing <- c(missing, "BlueSky Playground Run ID")
+    if (identical(input$REGION, "08")) {
+      if (!nzchar(input$FORECAST_AQI_SELECT %||% "")) missing <- c(missing, "Forecasted AQI")
+      if (!nzchar(input$SUPERFOG_SCREEN_SELECT %||% "")) missing <- c(missing, "Superfog selection")
+    }
+    
+    if (length(missing) == 0) {
+      return(NULL)
+    }
+    
+    tags$div(
+      style = "
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      background: #fff7e6;
+      border-left: 5px solid #F28C28;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #4a3a1a;
+    ",
+      tags$strong("Required before downloading: "),
+      paste(missing, collapse = ", ")
+    )
+  })
   
   observeEvent(
     list(
@@ -630,18 +695,8 @@ server <- function(input, output, session) {
     filename = function() {
       smoke_report_title()
     },
+    
     content = function(file) {
-      
-      req(nzchar(input$REGION))
-      req(nzchar(input$REGION))
-      req(nzchar(input$FOREST))
-      req(nzchar(input$BURN_NAME))
-      req(nzchar(input$RUN_ID))
-      
-      if (input$REGION == "08") {
-        req(input$FORECAST_AQI_SELECT)
-        req(input$SUPERFOG_SCREEN_SELECT)
-      }
       
       withProgress(message = "Generating smoke report...", value = 0, {
         
