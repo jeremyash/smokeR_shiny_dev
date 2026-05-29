@@ -26,6 +26,7 @@ source("R/github_helpers.R")
 source("R/log_helpers.R")
 source("R/filename_helpers.R")
 source("R/pb_helpers.R")
+source("R/constants.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -132,17 +133,7 @@ ui <- fluidPage(
             selectInput(
               "REGION",
               "USFS Region",
-              choices = c(
-                "Select a Region" = "",
-                "02",
-                "03",
-                "04",
-                "05",
-                "06",
-                "08",
-                "09",
-                "10"
-              ),
+              choices = REGION_CHOICES,
               selected = ""
             ),
             uiOutput("FOREST"),
@@ -156,7 +147,7 @@ ui <- fluidPage(
             selectInput(
               "HOURLY_MAP_SELECT",
               "Include hourly smoke map?",
-              choices = c("No", "Yes")
+              choices = YES_NO_CHOICES
             ),
             
             tags$div(class = "app-section-title", "Contact information"),
@@ -434,14 +425,7 @@ server <- function(input, output, session) {
       selectInput(
         "FORECAST_AQI_SELECT",
         "Forecasted AQI downwind of ignition",
-        choices = c(
-          "Good",
-          "Moderate",
-          "USG",
-          "Unhealthy",
-          "Very Unhealthy",
-          "Hazardous"
-        ),
+        choices = AQI_CHOICES,
         selected = isolate(input$FORECAST_AQI_SELECT %||% "Good")
       ),
       selectInput(
@@ -575,9 +559,9 @@ server <- function(input, output, session) {
         rendered_file <- file.path(tempdir(), report_filename)
         
         report_url <- make_github_pages_url(
-          owner = "jeremyash",
-          repo = "smoke_reports",
-          pages_dir = "docs/reports",
+          owner = APP_OWNER,
+          repo = APP_REPO,
+          pages_dir = REPORT_PAGES_DIR,
           report_filename = report_filename
         )
         
@@ -644,10 +628,10 @@ server <- function(input, output, session) {
           
           report_url <- upload_report_to_github_pages(
             local_file = rendered_file,
-            owner = "jeremyash",
-            repo = "smoke_reports",
-            branch = "main",
-            pages_dir = "docs/reports",
+            owner = APP_OWNER,
+            repo = APP_REPO,
+            branch = APP_BRANCH,
+            pages_dir = PB_PAGES_DIR,
             report_filename = report_filename,
             commit_message = paste(
               input$BURN_NAME,
