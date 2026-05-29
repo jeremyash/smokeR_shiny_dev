@@ -1389,7 +1389,10 @@ cat(
 
 
 ```{r log_file, include = FALSE, echo = FALSE, message = FALSE}
-append_smoke_app_log(
+
+tryCatch(
+  {
+  append_smoke_app_log(
   sheet_url = params$LOG_SHEET_URL,
   report_type = "Smoke Report",
   region = params$REGION,
@@ -1405,4 +1408,12 @@ append_smoke_app_log(
   report_url = params$REPORT_URL,
   pb_map_url = params$PB_MAP_URL
 )
+    message("Smoke report logged successfully")
+  },
+  error = function(e) {
+    message("Smoke report log failed: ", conditionMessage(e))
+  }
+)
+
+
 ```
