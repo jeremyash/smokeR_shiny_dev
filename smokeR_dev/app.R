@@ -22,8 +22,8 @@ require(digest)
 source("R/helpers.R")
 source("R/github_helpers.R")
 source("R/log_helpers.R")
-source("R/pb_helpers.R")
 source("R/filename_helpers.R")
+source("R/pb_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -424,23 +424,6 @@ server <- function(input, output, session) {
     ignoreInit = TRUE
   )
   
-  # reactive handler to capture unit name
-  r_unit <- reactive({
-    req(input$FOREST) # require it not to be empty
-    as.character(input$FOREST)
-  })
-  
-  # reactive handler to capture burn name
-  r_burn <- reactive({
-    req(input$BURN_NAME) # require it not to be empty
-    as.character(input$BURN_NAME)
-  })
-  
-  # reactive handler to capture run_id
-  r_id <- reactive({
-    req(input$RUN_ID) # require it not to be empty
-    as.character(input$RUN_ID)
-  })
   
   # subset Forest names based on Region; start blank so the right panel stays empty initially
   output$FOREST <- renderUI({
@@ -499,20 +482,6 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = FALSE)
   
-  # download file names
-  burn_name_for_download <- reactive({
-    req(input$BURN_NAME)
-    safe_filename(input$BURN_NAME)
-  })
-  
-  forest_short_for_download <- reactive({
-    req(input$FOREST)
-    short_forest_name(input$FOREST)
-  })
-  
-  report_date_for_file <- reactive({
-    format(Sys.Date(), "%Y%m%d")
-  })
   
   smoke_report_title <- reactive({
     req(input$BURN_NAME, input$FOREST)
