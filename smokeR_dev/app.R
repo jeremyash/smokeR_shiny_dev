@@ -21,6 +21,7 @@ library(fs)
 source("R/helpers.R")
 source("R/github_helpers.R")
 source("R/log_helpers.R")
+source("R/pb_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -602,66 +603,17 @@ server <- function(input, output, session) {
       
       incProgress(0.15, detail = "Preparing PB Piedmont map parameters")
       
-      burn_name_for_file <- input$PB_ONLY_BURN_NAME %>%
-        as.character() %>%
-        safe_filename()
-      
-      forest_short_for_file <- input$PB_ONLY_FOREST %>%
-        as.character() %>%
-        short_forest_name()
-      
-      pb_map_filename <- paste0(
-        format(Sys.Date(), "%Y%m%d"),
-        "-",
-        forest_short_for_file,
-        "-",
-        burn_name_for_file,
-        "-pb-piedmont.html"
+      pb_result <- create_pb_piedmont_map(
+        burn_name = input$PB_ONLY_BURN_NAME,
+        forest = input$PB_ONLY_FOREST,
+        run_id = NA,
+        pb_zip_datapath = input$PB_ONLY_HOURLY_ZIP$datapath,
+        pb_zip_name = input$PB_ONLY_HOURLY_ZIP$name,
+        burn_lat = input$PB_ONLY_LAT,
+        burn_lon = input$PB_ONLY_LON
       )
       
-      pb_zip_copy <- file.path(
-        tempdir(),
-        paste0("pb-hourly-", format(Sys.time(), "%Y%m%d%H%M%S"), ".zip")
-      )
-      
-      file.copy(input$PB_ONLY_HOURLY_ZIP$datapath, pb_zip_copy, overwrite = TRUE)
-      
-      pb_rendered_file <- file.path(tempdir(), pb_map_filename)
-      
-      incProgress(0.45, detail = "Rendering standalone PB Piedmont map")
-      
-      rmarkdown::render(
-        "pb_piedmont_particle_map.Rmd",
-        output_file = pb_rendered_file,
-        params = list(
-          BURN_NAME = input$PB_ONLY_BURN_NAME,
-          FOREST = input$PB_ONLY_FOREST,
-          RUN_ID = NA,
-          PB_HOURLY_ZIP = pb_zip_copy,
-          BURN_DATE = NA,
-          BURN_LAT = input$PB_ONLY_LAT,
-          BURN_LON = input$PB_ONLY_LON
-        ),
-        envir = new.env(parent = globalenv())
-      )
-      
-      incProgress(0.30, detail = "Uploading PB Piedmont map to GitHub Pages")
-      
-      pb_url <- upload_report_to_github_pages(
-        local_file = pb_rendered_file,
-        owner = "jeremyash",
-        repo = "smoke_reports",
-        branch = "main",
-        pages_dir = "docs/pb-piedmont",
-        report_filename = pb_map_filename,
-        commit_message = paste(
-          input$PB_ONLY_BURN_NAME,
-          "| PB Piedmont |",
-          format(Sys.Date(), "%Y-%m-%d"),
-          "|",
-          input$PB_ONLY_FOREST
-        )
-      )
+      pb_url <- pb_result$url
       
       pb_only_map_link(pb_url)
       
