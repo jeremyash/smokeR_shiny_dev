@@ -73,193 +73,28 @@ ui <- fluidPage(
   tags$head(
     
     tags$link(
+      rel = "stylesheet",
+      type = "text/css",
+      href = "app.css?v=1"
+    ),
+    
+    tags$link(
       rel = "icon",
       type = "image/png",
       sizes = "512x512",
       href = "favicon_512x512_rounded.png?v=120"
     ),
+    
     tags$link(
       rel = "shortcut icon",
       type = "image/png",
       href = "favicon_512x512_rounded.png?v=120"
     ),
     
-    # Optional Chrome theme color
     tags$meta(
       name = "theme-color",
       content = "#032B5B"
-    ),
-    
-    # App styling
-    tags$style(HTML("
-      body {
-        background: #f3f6f8;
-        color: #1f2d3a;
-      }
-
-      .container-fluid {
-        max-width: 1500px;
-      }
-
-      .app-title-banner {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        margin: 18px 0 24px 0;
-        padding: 20px 24px;
-        background: linear-gradient(90deg, #032B5B 0%, #0B3D73 100%);
-        border-radius: 16px;
-        border-left: 8px solid #F28C28;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.20);
-      }
-
-      .app-title-banner img {
-        width: 72px;
-        height: 72px;
-        border-radius: 18px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.30);
-        flex-shrink: 0;
-      }
-
-      .app-title-text {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .app-title-main {
-        color: white;
-        font-size: 34px;
-        font-weight: 800;
-        line-height: 1.05;
-        margin: 0;
-      }
-
-      .app-title-sub {
-        color: rgba(255,255,255,0.84);
-        font-size: 16px;
-        margin-top: 7px;
-        letter-spacing: 0.3px;
-      }
-
-      .sidebar-card, .main-card {
-        background: white;
-        border-radius: 12px;
-        border: 1px solid #d8e0e6;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      }
-
-      .sidebar-card {
-        padding: 18px 18px 10px 18px;
-      }
-
-      .main-card {
-        padding: 22px 24px;
-      }
-
-      .app-section-title {
-        margin: 18px 0 12px 0;
-        padding: 8px 10px;
-        background: #EAF1F5;
-        color: #032B5B;
-        border-left: 6px solid #F28C28;
-        border-radius: 6px;
-        font-weight: 800;
-        font-size: 15px;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-      }
-
-      .app-section-title:first-child {
-        margin-top: 0;
-      }
-
-      .form-group label {
-        color: #032B5B;
-        font-weight: 700;
-      }
-
-      .form-control, .selectize-input {
-        border-radius: 6px;
-        border-color: #b8c5cf;
-      }
-
-      .btn {
-        border-radius: 8px;
-        font-weight: 700;
-      }
-
-      #report {
-        background: #F28C28;
-        border-color: #D8791F;
-        color: white;
-        margin-right: 8px;
-        margin-bottom: 8px;
-      }
-
-      #kmz {
-        background: #032B5B;
-        border-color: #032B5B;
-        color: white;
-        margin-bottom: 8px;
-      }
-
-      .selected-summary {
-        padding: 14px 16px;
-        margin-bottom: 18px;
-        background: linear-gradient(90deg, #EAF1F5, #ffffff);
-        border-left: 6px solid #F28C28;
-        border-radius: 8px;
-      }
-
-      .selected-summary h2 {
-        margin: 0 0 5px 0;
-        color: #032B5B;
-        font-size: 24px;
-        font-weight: 800;
-      }
-
-      .app-help-box {
-        margin-top: 22px;
-        padding: 16px 18px;
-        background: #F8FAFB;
-        border: 1px solid #d8e0e6;
-        border-radius: 10px;
-        color: #334;
-      }
-
-      .app-help-box a {
-        color: #032B5B;
-        font-weight: 700;
-      }
-
-      /* Keep the report link/status panel visible while long inputs scroll. */
-      .app-layout-row {
-        align-items: flex-start;
-      }
-
-      .app-scroll-sidebar {
-        max-height: calc(100vh - 150px);
-        overflow-y: auto;
-        padding-right: 8px;
-      }
-
-      .app-fixed-main {
-        position: sticky;
-        top: 16px;
-      }
-
-      @media (max-width: 991px) {
-        .app-scroll-sidebar {
-          max-height: none;
-          overflow-y: visible;
-          padding-right: 0;
-        }
-
-        .app-fixed-main {
-          position: static;
-        }
-      }
-    "))
+    )
   ),
   
   # UI: App title banner ------------------------------------
