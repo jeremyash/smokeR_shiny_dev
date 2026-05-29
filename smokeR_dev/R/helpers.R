@@ -11,17 +11,24 @@ safe_filename <- function(x) {
 }
 
 short_forest_name <- function(x) {
-  forest_safe <- safe_filename(x) %>%
-    stringr::str_replace("national-forest", "nf") %>%
+  forest_safe <- safe_filename(x) |>
+    stringr::str_replace("national-forests", "nf") |>
+    stringr::str_replace("national-forest", "nf") |>
+    stringr::str_replace("national-grasslands", "ng") |>
     stringr::str_replace("national-grassland", "ng")
   
   tokens <- stringr::str_split(forest_safe, "-", simplify = FALSE)[[1]]
   tokens <- tokens[tokens != ""]
   
-  paste0(
+  base <- paste0(
     ifelse(tokens %in% c("nf", "ng"), tokens, stringr::str_sub(tokens, 1, 1)),
     collapse = ""
   )
+  
+  suffix <- digest::digest(forest_safe, algo = "xxhash32") |>
+    stringr::str_sub(1, 4)
+  
+  paste0(base, "-", suffix)
 }
 
 get_github_pat <- function() {

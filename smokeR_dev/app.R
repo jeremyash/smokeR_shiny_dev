@@ -13,6 +13,7 @@ require(googlesheets4)
 library(gh)
 library(base64enc)
 library(fs)
+require(digest)
 
 
 # LOAD DATA ----------------------------------------------
@@ -588,7 +589,6 @@ server <- function(input, output, session) {
   })
   
   
-  
   ### create standalone PB Piedmont map only
   observeEvent(input$create_pb_only_map, {
     req(input$PB_ONLY_FOREST)
@@ -716,60 +716,22 @@ server <- function(input, output, session) {
         )
         
         if (pb_zip_available) {
-          incProgress(0.08, detail = "Rendering PB Piedmont map")
-          
-          pb_zip_copy <- file.path(
-            tempdir(),
-            paste0(tools::file_path_sans_ext(basename(input$PB_HOURLY_ZIP$name)), "-", format(Sys.time(), "%Y%m%d%H%M%S"), ".zip")
-          )
-          file.copy(input$PB_HOURLY_ZIP$datapath, pb_zip_copy, overwrite = TRUE)
-          
-          pb_map_filename <- paste0(
-            format(Sys.Date(), "%Y%m%d"),
-            "-",
-            forest_short_for_file,
-            "-",
-            burn_name_for_file,
-            "-pb-piedmont.html"
-          )
-          
-          pb_rendered_file <- file.path(tempdir(), pb_map_filename)
-          
-          rmarkdown::render(
-            "pb_piedmont_particle_map.Rmd",
-            output_file = pb_rendered_file,
-            params = list(
-              BURN_NAME = input$BURN_NAME,
-              FOREST = input$FOREST,
-              RUN_ID = input$RUN_ID,
-              PB_HOURLY_ZIP = pb_zip_copy,
-              BURN_DATE = NA,
-              BURN_LAT = NA,
-              BURN_LON = NA
-            ),
-            envir = new.env(parent = globalenv())
-          )
-          
-          incProgress(0.07, detail = "Uploading PB Piedmont particle map")
+          incProgress(0.08, detail = "Rendering and uploading PB Piedmont map")
           
           pb_map_url <- tryCatch({
-            upload_report_to_github_pages(
-              local_file = pb_rendered_file,
-              owner = "jeremyash",
-              repo = "smoke_reports",
-              branch = "main",
-              pages_dir = "docs/pb-piedmont",
-              report_filename = pb_map_filename,
-              commit_message = paste(
-                input$BURN_NAME,
-                "| PB Piedmont |",
-                format(Sys.Date(), "%Y-%m-%d"),
-                "|",
-                input$FOREST
-              )
+            pb_result <- create_pb_piedmont_map(
+              burn_name = input$BURN_NAME,
+              forest = input$FOREST,
+              run_id = input$RUN_ID,
+              pb_zip_datapath = input$PB_HOURLY_ZIP$datapath,
+              pb_zip_name = input$PB_HOURLY_ZIP$name,
+              burn_lat = NA,
+              burn_lon = NA
             )
+            
+            pb_result$url
           }, error = function(e) {
-            message("PB Piedmont map upload failed: ", conditionMessage(e))
+            message("PB Piedmont map render/upload failed: ", conditionMessage(e))
             NULL
           })
         }
