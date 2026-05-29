@@ -39,3 +39,20 @@ get_github_pat <- function() {
   
   stop("GitHub token not found.")
 }
+
+get_log_sheet_url <- function() {
+  
+  url <- Sys.getenv("LOG_SHEET_URL")
+  
+  if (!identical(url, "")) {
+    return(url)
+  }
+  
+  url_file <- ".secrets/log_sheet_url.txt"
+  
+  if (file.exists(url_file)) {
+    return(trimws(readLines(url_file, warn = FALSE)[1]))
+  }
+  
+  stop("Log sheet URL not found.")
+}

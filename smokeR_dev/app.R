@@ -22,7 +22,7 @@ source("R/helpers.R")
 source("R/github_helpers.R")
 source("R/log_helpers.R")
 
-LOG_SHEET_URL <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
+LOG_SHEET_URL <- get_log_sheet_url()
 
 nfs_raw <- readRDS("usfs_unit_list.RDS")
 
