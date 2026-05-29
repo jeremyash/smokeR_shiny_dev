@@ -669,10 +669,12 @@ server <- function(input, output, session) {
         {
           append_smoke_app_log(
             sheet_url = LOG_SHEET_URL,
-            report_type = "PB Piedmont Map Only",
+            report_type = "Standalone PB Piedmont Map",
             region = "08",
             forest = input$PB_ONLY_FOREST,
             burn_name = input$PB_ONLY_BURN_NAME,
+            burn_date = Sys.Date(),
+            date_issued = Sys.Date(),
             lat = input$PB_ONLY_LAT,
             lon = input$PB_ONLY_LON,
             pb_map_url = pb_url
@@ -685,16 +687,6 @@ server <- function(input, output, session) {
         }
       )
       
-      incProgress(0.05, detail = "Logging PB Piedmont map")
-      
-      log_standalone_pb_piedmont_map(
-        region = "08",
-        forest = input$PB_ONLY_FOREST,
-        burn_unit = input$PB_ONLY_BURN_NAME,
-        latitude = input$PB_ONLY_LAT,
-        longitude = input$PB_ONLY_LON,
-        pb_map_url = pb_url
-      )
       
       incProgress(0.05, detail = "PB Piedmont map ready")
     })
