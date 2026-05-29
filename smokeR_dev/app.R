@@ -722,6 +722,7 @@ server <- function(input, output, session) {
           HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
           FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
           SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL,
+          LOG_SHEET_URL = get_log_sheet_url(),
           REPORT_URL = NULL,
           PB_MAP_URL = NULL
         )
@@ -868,27 +869,6 @@ server <- function(input, output, session) {
           )
           
           report_link(report_url)
-          
-          tryCatch(
-            {
-              append_smoke_app_log(
-                sheet_url = LOG_SHEET_URL,
-                report_type = "Smoke Report",
-                region = input$REGION,
-                forest = input$FOREST,
-                burn_name = input$BURN_NAME,
-                run_id = input$RUN_ID,
-                superfog_potential = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NA,
-                report_url = report_url,
-                pb_map_url = pb_map_url
-              )
-              message("Smoke report logged successfully")
-              
-            },
-            error = function(e) {
-              message("Smoke report log failed: ", conditionMessage(e))
-            }
-          )
           
           update_index_page(
             owner = "jeremyash",

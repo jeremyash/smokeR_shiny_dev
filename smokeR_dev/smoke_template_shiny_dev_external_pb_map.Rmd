@@ -20,6 +20,7 @@ params:
   HOURLY_MAP_SELECT: NA 
   FORECAST_AQI_SELECT: NA
   SUPERFOG_SCREEN_SELECT: NA
+  LOG_SHEET_URL: NA
   REPORT_URL: NA
   PB_MAP_URL: NA
 ---
@@ -1368,3 +1369,21 @@ cat(
 ```
 
 
+```{r log_file, include = FALSE, echo = FALSE, message = FALSE}
+append_smoke_app_log(
+  sheet_url = params$LOG_SHEET_URL,
+  report_type = "Smoke Report",
+  region = params$REGION,
+  forest = params$FOREST,
+  burn_name = params$BURN_NAME,
+  burn_date = burn_info$date,
+  date_issued = Sys.Date(),
+  lat = burn_info$lat,
+  lon = burn_info$lon,
+  acreage = burn_info$acres,
+  run_id = params$RUN_ID,
+  superfog_potential = if (params$REGION == "08") params$SUPERFOG_SCREEN_SELECT else NA,
+  report_url = params$REPORT_URL,
+  pb_map_url = params$PB_MAP_URL
+)
+```
