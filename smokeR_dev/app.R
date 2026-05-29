@@ -434,8 +434,10 @@ server <- function(input, output, session) {
   observe({
     if (isTRUE(report_ready())) {
       shinyjs::enable("report")
+      shinyjs::enable("kmz")
     } else {
       shinyjs::disable("report")
+      shinyjs::disable("kmz")
     }
   })
   
