@@ -27,6 +27,7 @@ source("R/log_helpers.R")
 source("R/filename_helpers.R")
 source("R/pb_helpers.R")
 source("R/constants.R")
+source("R/validation_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -79,7 +80,7 @@ ui <- fluidPage(
     tags$link(
       rel = "stylesheet",
       type = "text/css",
-      href = "app.css?v=1"
+      href = "app.css?v=2"
     ),
     
     tags$link(
@@ -239,27 +240,29 @@ server <- function(input, output, session) {
   pb_only_map_link <- reactiveVal(NULL)
   
   # SERVER: Required input validation -----------------------
-  report_ready <- reactive({
-    base_ready <- all(
-      nzchar(input$REGION %||% ""),
-      nzchar(input$FOREST %||% ""),
-      nzchar(input$BURN_NAME %||% ""),
-      nzchar(input$RUN_ID %||% ""),
-      nzchar(input$HOURLY_MAP_SELECT %||% "")
-    )
+  
+  observe({
+    if (is_report_ready(input)) {
+      shinyjs::enable("report")
+      shinyjs::enable("kmz")
+    } else {
+      shinyjs::disable("report")
+      shinyjs::disable("kmz")
+    }
+  })
+  
+  observe({
+    missing_ids <- c()
     
-    observe({
-      missing_ids <- c()
-      
-      if (!nzchar(input$REGION %||% "")) missing_ids <- c(missing_ids, "REGION")
-      if (!nzchar(input$FOREST %||% "")) missing_ids <- c(missing_ids, "FOREST")
-      if (!nzchar(input$BURN_NAME %||% "")) missing_ids <- c(missing_ids, "BURN_NAME")
-      if (!nzchar(input$RUN_ID %||% "")) missing_ids <- c(missing_ids, "RUN_ID")
-      
-      all_ids <- c("REGION", "FOREST", "BURN_NAME", "RUN_ID")
-      
-      shinyjs::runjs(sprintf(
-        "
+    if (!nzchar(input$REGION %||% "")) missing_ids <- c(missing_ids, "REGION")
+    if (!nzchar(input$FOREST %||% "")) missing_ids <- c(missing_ids, "FOREST")
+    if (!nzchar(input$BURN_NAME %||% "")) missing_ids <- c(missing_ids, "BURN_NAME")
+    if (!nzchar(input$RUN_ID %||% "")) missing_ids <- c(missing_ids, "RUN_ID")
+    
+    all_ids <- c("REGION", "FOREST", "BURN_NAME", "RUN_ID")
+    
+    shinyjs::runjs(sprintf(
+      "
     const allIds = %s;
     const missingIds = %s;
 
@@ -275,62 +278,13 @@ server <- function(input, output, session) {
         .addClass('required-missing');
     });
     ",
-        jsonlite::toJSON(all_ids, auto_unbox = TRUE),
-        jsonlite::toJSON(missing_ids, auto_unbox = TRUE)
-      ))
-    })
-    
-    r8_ready <- TRUE
-    
-    if (identical(input$REGION, "08")) {
-      r8_ready <- all(
-        nzchar(input$FORECAST_AQI_SELECT %||% ""),
-        nzchar(input$SUPERFOG_SCREEN_SELECT %||% "")
-      )
-    }
-    
-    base_ready && r8_ready
-  })
-  
-  observe({
-    if (isTRUE(report_ready())) {
-      shinyjs::enable("report")
-      shinyjs::enable("kmz")
-    } else {
-      shinyjs::disable("report")
-      shinyjs::disable("kmz")
-    }
+      jsonlite::toJSON(all_ids, auto_unbox = TRUE),
+      jsonlite::toJSON(missing_ids, auto_unbox = TRUE)
+    ))
   })
   
   output$report_required_msg <- renderUI({
-    missing <- c()
-    
-    if (!nzchar(input$REGION %||% "")) missing <- c(missing, "USFS Region")
-    if (!nzchar(input$FOREST %||% "")) missing <- c(missing, "Forest")
-    if (!nzchar(input$BURN_NAME %||% "")) missing <- c(missing, "Burn unit name")
-    if (!nzchar(input$RUN_ID %||% "")) missing <- c(missing, "BlueSky Playground Run ID")
-    if (identical(input$REGION, "08")) {
-      if (!nzchar(input$FORECAST_AQI_SELECT %||% "")) missing <- c(missing, "Forecasted AQI")
-      if (!nzchar(input$SUPERFOG_SCREEN_SELECT %||% "")) missing <- c(missing, "Superfog selection")
-    }
-    
-    if (length(missing) == 0) {
-      return(NULL)
-    }
-    
-    tags$div(
-      style = "
-      margin-bottom: 10px;
-      padding: 10px 12px;
-      background: #fff7e6;
-      border-left: 5px solid #F28C28;
-      border-radius: 6px;
-      font-size: 14px;
-      color: #4a3a1a;
-    ",
-      tags$strong("Required before downloading: "),
-      paste(missing, collapse = ", ")
-    )
+    report_required_message_ui(input)
   })
   
   # SERVER: Reset links when inputs change ------------------
@@ -662,7 +616,7 @@ server <- function(input, output, session) {
             owner = APP_OWNER,
             repo = APP_REPO,
             branch = APP_BRANCH,
-            pages_dir = PB_PAGES_DIR,
+            pages_dir = REPORT_PAGES_DIR,
             report_filename = report_filename,
             commit_message = paste(
               input$BURN_NAME,

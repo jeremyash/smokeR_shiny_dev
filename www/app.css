@@ -174,3 +174,29 @@ body {
   border-color: #C62828 !important;
   box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.12);
 }
+
+#report,
+#kmz {
+  cursor: pointer;
+}
+
+#report.disabled,
+#kmz.disabled,
+#report[disabled],
+#kmz[disabled],
+#report[aria-disabled="true"],
+#kmz[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  opacity: 0.65;
+}
+
+.required-fields-message {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #fff7e6;
+  border-left: 5px solid #F28C28;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #4a3a1a;
+}
