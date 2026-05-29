@@ -19,13 +19,9 @@ create_pb_piedmont_map <- function(
     as.character() |>
     short_forest_name()
   
-  pb_map_filename <- paste0(
-    format(Sys.Date(), "%Y%m%d"),
-    "-",
-    forest_short_for_file,
-    "-",
-    burn_name_for_file,
-    "-pb-piedmont.html"
+  pb_map_filename <- make_pb_filename(
+    burn_name = burn_name,
+    forest = forest
   )
   
   pb_zip_copy <- file.path(

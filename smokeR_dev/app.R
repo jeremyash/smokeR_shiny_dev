@@ -23,6 +23,7 @@ source("R/helpers.R")
 source("R/github_helpers.R")
 source("R/log_helpers.R")
 source("R/pb_helpers.R")
+source("R/filename_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -514,24 +515,20 @@ server <- function(input, output, session) {
   })
   
   smoke_report_title <- reactive({
-    paste0(
-      report_date_for_file(),
-      "-",
-      forest_short_for_download(),
-      "-",
-      burn_name_for_download(),
-      ".html"
+    req(input$BURN_NAME, input$FOREST)
+    
+    make_report_filename(
+      burn_name = input$BURN_NAME,
+      forest = input$FOREST
     )
   })
   
   kmz_file <- reactive({
-    paste0(
-      report_date_for_file(),
-      "-",
-      forest_short_for_download(),
-      "-",
-      burn_name_for_download(),
-      "-bsky-dispersion.kmz"
+    req(input$BURN_NAME, input$FOREST)
+    
+    make_kmz_filename(
+      burn_name = input$BURN_NAME,
+      forest = input$FOREST
     )
   })
   
@@ -683,13 +680,9 @@ server <- function(input, output, session) {
           as.character() %>%
           short_forest_name()
         
-        report_filename <- paste0(
-          format(Sys.Date(), "%Y%m%d"),
-          "-",
-          forest_short_for_file,
-          "-",
-          burn_name_for_file,
-          ".html"
+        report_filename <- make_report_filename(
+          burn_name = input$BURN_NAME,
+          forest = input$FOREST
         )
         
         rendered_file <- file.path(tempdir(), report_filename)
