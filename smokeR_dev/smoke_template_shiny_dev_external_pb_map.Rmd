@@ -413,11 +413,30 @@ forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI fo
                                                                       sep = "")} else{""}
 
 # superfog statement
-superfog_sen <- ifelse(burn_info$region == "08",
-                       ifelse(params$SUPERFOG_SCREEN_SELECT == "Yes",
-                              "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation.",
-                              "The spot weather forecast indicates there is not potential for superfog formation in the overnight hours."),
-                       "")
+superfog_sen <- if (burn_info$region == "08") {
+  
+  if (params$SUPERFOG_SCREEN_SELECT == "Yes") {
+    
+    if (!is.null(params$PB_MAP_URL) && !is.na(params$PB_MAP_URL) && nzchar(params$PB_MAP_URL)) {
+      paste0(
+        "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
+        "Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation: ",
+        "<a href='", params$PB_MAP_URL, "' target='_blank'>PB Piedmont map</a>."
+      )
+    } else {
+      paste0(
+        "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
+        "PB Piedmont hourly output was not uploaded with this report, so no separate PB Piedmont map was generated."
+      )
+    }
+    
+  } else {
+    "The spot weather forecast indicates there is not potential for superfog formation in the overnight hours."
+  }
+  
+} else {
+  ""
+}
 
 
 
@@ -1264,7 +1283,7 @@ hourly_leaflet
 ```{r superfog_section, results='asis'}
 if (params$REGION == "08") {
   cat("## Superfog Screening\n\n")
-  cat(superfog_sen, "\n")
+  cat(superfog_sen, "\n\n")
 }
 ```
 
