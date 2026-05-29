@@ -41,6 +41,14 @@ append_smoke_app_log <- function(
     `Report Type` = report_type
   )
   
+  google_key_file <- ".secrets/google-service-account.json"
+  
+  if (file.exists(google_key_file)) {
+    googlesheets4::gs4_auth(path = google_key_file)
+  } else {
+    stop("Google service account key file not found: ", google_key_file)
+  }
+  
   googlesheets4::sheet_append(
     ss = sheet_url,
     data = log_row
