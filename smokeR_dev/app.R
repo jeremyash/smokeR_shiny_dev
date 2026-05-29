@@ -1,3 +1,5 @@
+# LIBRARIES ----------------------------------------------
+
 require(shiny)
 require(tidyverse)
 require(rmarkdown)
@@ -13,13 +15,15 @@ library(base64enc)
 library(fs)
 
 
-# load data ----------------------------------------------
+# LOAD DATA ----------------------------------------------
 
-# unit names
-# Read only the two plain character fields needed for UI choices.
-# Do not convert the whole object with as.data.frame()/dplyr first, because
-# some versions of usfs_unit_list.RDS contain an sf geometry column that can
-# break unique(), sort(), selectizeInput(), or dplyr assignment during app startup.
+# source helper functions
+source("R/helpers.R")
+source("R/github_helpers.R")
+source("R/log_helpers.R")
+
+LOG_SHEET_URL <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
+
 nfs_raw <- readRDS("usfs_unit_list.RDS")
 
 if (!all(c("region", "forests") %in% names(nfs_raw))) {
@@ -53,247 +57,11 @@ aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-We
   arrange(name)
 
 
-# helper functions ----------------------------------------------
-
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}
-
-safe_filename <- function(x) {
-  x %>%
-    as.character() %>%
-    stringr::str_to_lower() %>%
-    stringr::str_replace_all("[^a-z0-9]+", "-") %>%
-    stringr::str_replace_all("(^-|-$)", "")
-}
-
-short_forest_name <- function(x) {
-  forest_safe <- safe_filename(x) %>%
-    stringr::str_replace("national-forest", "nf") %>%
-    stringr::str_replace("national-grassland", "ng")
-  
-  tokens <- stringr::str_split(forest_safe, "-", simplify = FALSE)[[1]]
-  tokens <- tokens[tokens != ""]
-  
-  paste0(
-    ifelse(tokens %in% c("nf", "ng"), tokens, stringr::str_sub(tokens, 1, 1)),
-    collapse = ""
-  )
-}
-
-upload_report_to_github_pages <- function(
-    local_file,
-    owner,
-    repo,
-    branch = "main",
-    pages_dir = "docs/reports",
-    report_filename,
-    commit_message = paste("Add smoke report", report_filename)
-) {
-  token <- get_github_pat()
-  
-  if (identical(token, "")) {
-    stop("GITHUB_PAT is not set.")
-  }
-  
-  github_path <- file.path(pages_dir, report_filename)
-  
-  existing <- tryCatch(
-    gh::gh(
-      "GET /repos/{owner}/{repo}/contents/{path}",
-      owner = owner,
-      repo = repo,
-      path = github_path,
-      ref = branch,
-      .token = token
-    ),
-    error = function(e) NULL
-  )
-  
-  sha <- if (!is.null(existing)) existing$sha else NULL
-  
-  gh::gh(
-    "PUT /repos/{owner}/{repo}/contents/{path}",
-    owner = owner,
-    repo = repo,
-    path = github_path,
-    message = commit_message,
-    content = base64enc::base64encode(local_file),
-    sha = sha,
-    branch = branch,
-    .token = token
-  )
-  
-  pages_url_dir <- pages_dir %>%
-    stringr::str_replace("^docs/?", "") %>%
-    stringr::str_replace_all("^/|/$", "")
-  
-  if (nzchar(pages_url_dir)) {
-    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
-  } else {
-    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
-  }
-}
 
 
-make_github_pages_url <- function(owner, repo, pages_dir, report_filename) {
-  pages_url_dir <- pages_dir %>%
-    stringr::str_replace("^docs/?", "") %>%
-    stringr::str_replace_all("^/|/$", "")
-  
-  if (nzchar(pages_url_dir)) {
-    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
-  } else {
-    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
-  }
-}
 
-log_standalone_pb_piedmont_map <- function(
-    region,
-    forest,
-    burn_unit,
-    latitude,
-    longitude,
-    pb_map_url
-) {
-  tryCatch(
-    expr = {
-      googledrive::drive_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-      googlesheets4::gs4_auth(path = ".secrets/smoke-report-logs-7ae50f5a86d1.json")
-      
-      log_url <- "https://docs.google.com/spreadsheets/d/1MR94IFlQSbBQ5mbh1nfnyPwT9Eu0GACjquya7rlg1KE/edit?gid=0#gid=0"
-      
-      model_run_df <- data.frame(
-        "Region" = region,
-        "Forest" = forest,
-        "Burn Unit" = burn_unit,
-        "Burn Date" = as.Date(NA),
-        "Date Issued" = Sys.Date(),
-        "Latitude" = latitude,
-        "Longitude" = longitude,
-        "Acreage" = NA_real_,
-        "PG Link" = NA_character_,
-        "Superfog Potential" = NA_character_,
-        "Smoke Report Link" = NA_character_,
-        "PB Piedmont Map Link" = pb_map_url,
-        "Report Type" = "Standalone PB Piedmont Map",
-        check.names = FALSE
-      )
-      
-      googlesheets4::sheet_append(log_url, model_run_df, sheet = 1)
-    },
-    error = function(e) {
-      message("FAILED TO WRITE STANDALONE PB PIEDMONT MAP LOG TO GOOGLE SHEETS: ", conditionMessage(e))
-      return(NULL)
-    }
-  )
-}
 
-update_index_page <- function(
-    owner,
-    repo,
-    report_filename,
-    report_label,
-    branch = "main"
-) {
-  token <- get_github_pat()
-  
-  if (identical(token, "")) {
-    stop("GITHUB_PAT is not set.")
-  }
-  
-  index_path <- "docs/index.html"
-  
-  existing <- tryCatch(
-    gh::gh(
-      "GET /repos/{owner}/{repo}/contents/{path}",
-      owner = owner,
-      repo = repo,
-      path = index_path,
-      ref = branch,
-      .token = token
-    ),
-    error = function(e) NULL
-  )
-  
-  if (!is.null(existing)) {
-    index_html <- rawToChar(base64enc::base64decode(existing$content))
-    sha <- existing$sha
-  } else {
-    index_html <- paste0(
-      "<!doctype html>\n",
-      "<html>\n",
-      "<head>\n",
-      "  <meta charset='utf-8'>\n",
-      "  <title>Smoke Reports</title>\n",
-      "</head>\n",
-      "<body>\n",
-      "  <h1>Smoke Reports</h1>\n",
-      "  <ul>\n",
-      "  </ul>\n",
-      "</body>\n",
-      "</html>\n"
-    )
-    sha <- NULL
-  }
-  
-  new_entry <- paste0(
-    "    <li>",
-    "<a href='reports/", report_filename, "' target='_blank'>",
-    htmltools::htmlEscape(report_label),
-    "</a>",
-    "<br><span style='font-size:12px; color:#666;'>",
-    htmltools::htmlEscape(report_filename),
-    "</span>",
-    "</li>\n"
-  )
-  
-  if (grepl("</ul>", index_html, fixed = TRUE)) {
-    index_html <- sub(
-      "</ul>",
-      paste0(new_entry, "</ul>"),
-      index_html,
-      fixed = TRUE
-    )
-  } else {
-    index_html <- paste0(
-      index_html,
-      "\n<ul>\n",
-      new_entry,
-      "</ul>\n"
-    )
-  }
-  
-  gh::gh(
-    "PUT /repos/{owner}/{repo}/contents/{path}",
-    owner = owner,
-    repo = repo,
-    path = index_path,
-    message = paste("Update index with", report_filename),
-    content = base64enc::base64encode(charToRaw(index_html)),
-    sha = sha,
-    branch = branch,
-    .token = token
-  )
-}
 
-get_github_pat <- function() {
-  token <- Sys.getenv("GITHUB_PAT")
-  
-  if (!identical(token, "")) {
-    return(token)
-  }
-  
-  token_file <- ".secrets/github_pat.txt"
-  
-  if (file.exists(token_file)) {
-    return(trimws(readLines(token_file, warn = FALSE)[1]))
-  }
-  
-  stop("GitHub token not found.")
-}
-
-###################################################################
 ui <- fluidPage(
   tags$title("Prescribed Fire Smoke Report"),
   
@@ -897,6 +665,26 @@ server <- function(input, output, session) {
       
       pb_only_map_link(pb_url)
       
+      tryCatch(
+        {
+          append_smoke_app_log(
+            sheet_url = LOG_SHEET_URL,
+            report_type = "PB Piedmont Map Only",
+            region = "08",
+            forest = input$PB_ONLY_FOREST,
+            burn_name = input$PB_ONLY_BURN_NAME,
+            lat = input$PB_ONLY_LAT,
+            lon = input$PB_ONLY_LON,
+            pb_map_url = pb_url
+          )
+          message("PB Piedmont map logged successfully")
+          
+        },
+        error = function(e) {
+          message("Standalone PB Piedmont log failed: ", conditionMessage(e))
+        }
+      )
+      
       incProgress(0.05, detail = "Logging PB Piedmont map")
       
       log_standalone_pb_piedmont_map(
@@ -1080,6 +868,27 @@ server <- function(input, output, session) {
           )
           
           report_link(report_url)
+          
+          tryCatch(
+            {
+              append_smoke_app_log(
+                sheet_url = LOG_SHEET_URL,
+                report_type = "Smoke Report",
+                region = input$REGION,
+                forest = input$FOREST,
+                burn_name = input$BURN_NAME,
+                run_id = input$RUN_ID,
+                superfog_potential = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NA,
+                report_url = report_url,
+                pb_map_url = pb_map_url
+              )
+              message("Smoke report logged successfully")
+              
+            },
+            error = function(e) {
+              message("Smoke report log failed: ", conditionMessage(e))
+            }
+          )
           
           update_index_page(
             owner = "jeremyash",
