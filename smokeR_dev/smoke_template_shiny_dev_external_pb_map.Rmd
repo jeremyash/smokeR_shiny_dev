@@ -398,13 +398,31 @@ tryCatch(
 
 
 # create contact info object
-contact_info <- tibble(name = if(params$AUTHOR != "") {params$AUTHOR} else{NA},
-                       phone = if(params$PHONE != "") {params$PHONE} else{NA},
-                       email = if(params$EMAIL != "") {params$EMAIL} else{NA}) %>% 
-  select_if(~ !any(is.na(.))) %>% 
-  unite("contact", sep=", ") %>% 
-  dplyr::pull(contact)
+contact_vals <- c(
+  params$AUTHOR,
+  params$PHONE,
+  params$EMAIL
+)
 
+contact_vals <- contact_vals[
+  !is.na(contact_vals) &
+    nzchar(trimws(contact_vals))
+]
+
+contact_info <- if (length(contact_vals) > 0) {
+  paste(contact_vals, collapse = ", ")
+} else {
+  ""
+}
+
+contact_block <- if (nzchar(contact_info)) {
+  paste0(
+    "<strong>For more information:</strong><br>",
+    contact_info
+  )
+} else {
+  ""
+}
 
 # forecasted AQI statement
 forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI for areas downwind of the planned burn is ",
@@ -455,8 +473,7 @@ This report documents the recent air quality, smoke analysis and weather forecas
 
 Additional smoke modeling output can be found at the <a href="`r bsky_link`" target="_blank">BlueSky Playground Dispersion Results</a>.
 
-<strong>For more information:</strong>
-`r contact_info`
+`r contact_block`
 
 ```{=html}
     </p>

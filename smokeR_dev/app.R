@@ -625,9 +625,18 @@ server <- function(input, output, session) {
           BURN_NAME = input$BURN_NAME,
           FOREST = input$FOREST,
           REGION = input$REGION,
-          AUTHOR = input$AUTHOR,
-          EMAIL = input$EMAIL,
-          PHONE = input$PHONE,
+          AUTHOR = {
+            x <- input$AUTHOR %||% ""
+            if (is.na(x)) "" else trimws(x)
+          },
+          EMAIL = {
+            x <- input$EMAIL %||% ""
+            if (is.na(x)) "" else trimws(x)
+          },
+          PHONE = {
+            x <- input$PHONE %||% ""
+            if (is.na(x)) "" else trimws(x)
+          },
           RUN_ID = input$RUN_ID,
           HOURLY_MAP_SELECT = input$HOURLY_MAP_SELECT,
           FORECAST_AQI_SELECT = if (input$REGION == "08") input$FORECAST_AQI_SELECT else NULL,
