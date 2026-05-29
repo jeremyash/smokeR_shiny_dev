@@ -62,15 +62,14 @@ aq_contact <- tibble(name = c("Jeremy Ash", "Melanie Pitrolo", "Gisele Majidi-We
 
 
 
-
-
-
+# USER INTERFACE ----------------------------------------------
 
 ui <- fluidPage(
   shinyjs::useShinyjs(),
-
+  
   tags$title("Prescribed Fire Smoke Report"),
   
+  # UI: Browser metadata and app styling --------------------
   tags$head(
     
     tags$link(
@@ -263,7 +262,7 @@ ui <- fluidPage(
     "))
   ),
   
-  # elements
+  # UI: App title banner ------------------------------------
   tags$div(
     class = "app-title-banner",
     tags$img(src = "favicon_512x512_rounded.png", alt = "Smoke Report Icon"),
@@ -274,10 +273,11 @@ ui <- fluidPage(
     )
   ),
   
+  # UI: Main two-column layout ------------------------------
   fluidRow(
     class = "app-layout-row",
     
-    ### left tool panel
+    # UI: Tool panel -----------------------------------------
     column(
       width = 5,
       tags$div(
@@ -286,6 +286,7 @@ ui <- fluidPage(
         tabsetPanel(
           id = "tool_tab",
           
+          # UI: Smoke Report tab ------------------------------------
           tabPanel(
             "Smoke Report",
             
@@ -340,6 +341,7 @@ ui <- fluidPage(
             downloadButton("kmz", "Download Google Earth File")
           ),
           
+          # UI: PB Piedmont Map tab ---------------------------------
           tabPanel(
             "PB Piedmont Map",
             
@@ -371,7 +373,7 @@ ui <- fluidPage(
       )
     ),
     
-    ### right status panel
+    # UI: Status and links panel ------------------------------
     column(
       width = 7,
       tags$div(
@@ -399,17 +401,15 @@ ui <- fluidPage(
     )
   )
 )
-###################################################################
+# SERVER --------------------------------------------------
 
-
-###################################################################
 server <- function(input, output, session) {
   
-  # github pages links
+  # SERVER: Shared reactive state ---------------------------
   report_link <- reactiveVal(NULL)
   pb_only_map_link <- reactiveVal(NULL)
   
-  # download report only appears when fields are inputted
+  # SERVER: Required input validation -----------------------
   report_ready <- reactive({
     base_ready <- all(
       nzchar(input$REGION %||% ""),
@@ -472,6 +472,7 @@ server <- function(input, output, session) {
     )
   })
   
+  # SERVER: Reset links when inputs change ------------------
   observeEvent(
     list(
       input$REGION,
@@ -507,7 +508,7 @@ server <- function(input, output, session) {
   )
   
   
-  # subset Forest names based on Region; start blank so the right panel stays empty initially
+  # SERVER: Forest selector ---------------------------------
   output$FOREST <- renderUI({
     req(nzchar(input$REGION))
     
@@ -527,7 +528,7 @@ server <- function(input, output, session) {
   })
   
   
-  # render text for unit
+  # SERVER: Selected summary outputs ------------------------
   output$selected_unit <- renderText({
     req(input$FOREST)
     input$FOREST
@@ -544,7 +545,7 @@ server <- function(input, output, session) {
     paste(input$RUN_ID)
   })
   
-  # updating author and contact information
+  # SERVER: Author contact autofill -------------------------
   observeEvent(input$AUTHOR, {
     if (is.null(input$AUTHOR) || input$AUTHOR == "") {
       updateTextInput(session, "EMAIL", value = "")
@@ -565,6 +566,7 @@ server <- function(input, output, session) {
   }, ignoreInit = FALSE)
   
   
+  # SERVER: Download filenames ------------------------------
   smoke_report_title <- reactive({
     req(input$BURN_NAME, input$FOREST)
     
@@ -583,9 +585,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # REGION 08 only AQI and superfog inputs.
-  # This section is hidden for all non-08 regions. Keep this separate from
-  # PB_HOURLY_UPLOAD so choosing "Yes" does not cause the selectInput to reset.
+  # SERVER: Region 8 conditional inputs ---------------------
   output$REGION_08_OPTIONS <- renderUI({
     if (is.null(input$REGION) || input$REGION != "08") {
       return(NULL)
@@ -637,7 +637,7 @@ server <- function(input, output, session) {
   })
   
   
-  ### create standalone PB Piedmont map only
+  # SERVER: Standalone PB Piedmont map workflow -------------
   observeEvent(input$create_pb_only_map, {
     req(input$PB_ONLY_FOREST)
     req(input$PB_ONLY_BURN_NAME)
@@ -692,7 +692,7 @@ server <- function(input, output, session) {
     })
   })
   
-  ### download handler for report
+  # SERVER: Smoke report workflow ---------------------------
   output$report <- downloadHandler(
     filename = function() {
       smoke_report_title()
@@ -850,7 +850,7 @@ server <- function(input, output, session) {
     }
   )
   
-  ### link to the report on github pages
+  # SERVER: GitHub Pages link displays ----------------------
   output$report_link_ui <- renderUI({
     req(report_link())
     
@@ -939,7 +939,7 @@ server <- function(input, output, session) {
   })
   
   
-  ### download handler for kmz
+  # SERVER: Google Earth KMZ workflow -----------------------
   output$kmz <- downloadHandler(
     # set up file names for downloads
     filename = function() {
@@ -1018,7 +1018,6 @@ server <- function(input, output, session) {
   )
 }
 
-###################################################################
+# RUN APP -------------------------------------------------
 
-### build it
 shinyApp(ui=ui, server=server)
