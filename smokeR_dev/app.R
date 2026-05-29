@@ -15,6 +15,7 @@ library(base64enc)
 library(fs)
 require(digest)
 require(shinyjs)
+require(here)
 
 
 # LOAD DATA ----------------------------------------------
@@ -28,7 +29,9 @@ source("R/pb_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
-nfs_raw <- readRDS("data/usfs_unit_list.RDS")
+nfs_raw <- readRDS(
+  here::here("smokeR_dev", "data", "usfs_unit_list.RDS")
+)
 
 if (!all(c("region", "forests") %in% names(nfs_raw))) {
   stop("usfs_unit_list.RDS must contain columns named 'region' and 'forests'.")
@@ -624,7 +627,11 @@ server <- function(input, output, session) {
         incProgress(0.30, detail = "Rendering full report (maps and analysis)")
         
         rmarkdown::render(
-          "smoke_template_shiny_dev_external_pb_map.Rmd",
+          input = here::here(
+            "smokeR_dev",
+            "templates",
+            "smoke_template_shiny_dev_external_pb_map.Rmd"
+          ),
           output_file = rendered_file,
           params = params_ls,
           envir = new.env(parent = globalenv())

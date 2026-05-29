@@ -5,7 +5,7 @@ output:
     toc: TRUE
     toc_depth: 3
     toc_float: TRUE
-    css: report_styles.css
+    css: ../report_styles.css
     highlight: null
     self_contained: TRUE
 geometry: margin=0.25in
@@ -46,6 +46,7 @@ library(base64enc)
 library(htmlwidgets)
 library(AirMonitor)
 library(MazamaCoreUtils)
+library(here)
 
 # Embed local/remote images as data URIs so the rendered HTML is self-contained
 make_data_uri <- function(path, mime = "image/png") {
@@ -70,9 +71,12 @@ download_data_uri <- function(url, mime = "image/png") {
   )
 }
 
-fire_icon_uri <- make_data_uri("red-fire-flame.png")
-fwd_img_uri <- make_data_uri("fwd.png")
-fasm_img_uri <- make_data_uri("fasm.png")
+fire_icon_uri <- make_data_uri(here::here("smokeR_dev", "red-fire-flame.png"))
+fwd_img_uri <- make_data_uri(here::here("smokeR_dev", "fwd.png"))
+fasm_img_uri <- make_data_uri(here::here("smokeR_dev", "fasm.png"))
+report_icon_uri <- make_data_uri(
+  here::here("smokeR_dev", "www", "favicon_512x512_rounded.png")
+)
 
 perm_mon_icon_uri <- download_data_uri(
   "https://github.com/jeremyash/icons/blob/main/perm_mon.png?raw=true"
@@ -464,7 +468,7 @@ superfog_sen <- if (burn_info$region == "08") {
 cat(
   paste0(
     '<div class="report-title-banner">',
-      '<img src="www/favicon_512x512_rounded.png" alt="Smoke Report Icon">',
+      '<img src="', report_icon_uri, '" alt="Smoke Report Icon">',
       '<div class="report-title-text">',
         '<div class="report-title-main">',
           params$BURN_NAME,
@@ -726,7 +730,9 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps s
 ## READ IN POP DATA ----------------------------------------------
 
 # census data
-pop <- readRDS("data/population_aggregate_factor.rds") 
+pop <- readRDS(
+  here::here("smokeR_dev", "data", "population_aggregate_factor.rds")
+)
 
 
 ## DOWNLOAD PNG MAP IMAGES AND GRID INFO ----------------------------------------------
@@ -1140,11 +1146,6 @@ vis_leaflet <- vis_leaflet %>%
 
 ## Hourly PM2.5 Leaflet ------------------------------------------------------------
 if (params$HOURLY_MAP_SELECT == "Yes") {
-
-  fire_icon_uri <- base64enc::dataURI(
-    file = "red-fire-flame.png",
-    mime = "image/png"
-  )
 
   hourly_leaflet <- leaflet() %>%
     addProviderTiles(providers$CartoDB.Voyager) %>%

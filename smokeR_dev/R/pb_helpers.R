@@ -39,7 +39,11 @@ create_pb_piedmont_map <- function(
   pb_rendered_file <- file.path(tempdir(), pb_map_filename)
   
   rmarkdown::render(
-    "pb_piedmont_particle_map.Rmd",
+    input = here::here(
+      "smokeR_dev",
+      "templates",
+      "pb_piedmont_particle_map.Rmd"
+    ),
     output_file = pb_rendered_file,
     params = list(
       BURN_NAME = burn_name,

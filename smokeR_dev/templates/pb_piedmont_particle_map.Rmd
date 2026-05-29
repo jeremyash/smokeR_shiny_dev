@@ -31,6 +31,7 @@ library(RCurl)
 library(rjson)
 library(base64enc)
 library(jsonlite)
+library(here)
 ```
 
 
@@ -123,21 +124,34 @@ if (is.na(burn_tz) || !nzchar(burn_tz)) {
 }
 
 burn_date <- burn_info$date[1]
+fire_icon_file <- here::here(
+  "smokeR_dev",
+  "red-fire-flame.png"
+)
 
-fire_icon_uri <- if (file.exists("red-fire-flame.png")) {
-  base64enc::dataURI(file = "red-fire-flame.png", mime = "image/png")
+fire_icon_uri <- if (file.exists(fire_icon_file)) {
+  base64enc::dataURI(
+    file = fire_icon_file,
+    mime = "image/png"
+  )
 } else {
   "https://raw.githubusercontent.com/jeremyash/icons/main/redFlame.png"
 }
 
-pb_icon_uri <- if (file.exists("www/pb_fog_icon.svg")) {
-  base64enc::dataURI(file = "www/pb_fog_icon.svg", mime = "image/svg+xml")
-} else if (file.exists("pb_fog_icon.svg")) {
-  base64enc::dataURI(file = "pb_fog_icon.svg", mime = "image/svg+xml")
-} else {
+pb_icon_file <- here::here(
+  "smokeR_dev",
+  "www",
   "pb_fog_icon.svg"
-}
+)
 
+pb_icon_uri <- if (file.exists(pb_icon_file)) {
+  base64enc::dataURI(
+    file = pb_icon_file,
+    mime = "image/svg+xml"
+  )
+} else {
+  ""
+}
 # ---- Unzip and index PB Piedmont hourly files ----
 # IMPORTANT: PB Piedmont hourly filenames are UTC timestamps.
 # The filenames remain the source of truth for ordering, but slider labels
