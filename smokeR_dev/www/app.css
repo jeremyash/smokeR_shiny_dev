@@ -167,3 +167,10 @@ body {
     position: static;
   }
 }
+
+.required-missing input[type="text"],
+.required-missing input[type="number"],
+.required-missing .selectize-input {
+  border-color: #C62828 !important;
+  box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.12);
+}

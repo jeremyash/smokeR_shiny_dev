@@ -248,6 +248,38 @@ server <- function(input, output, session) {
       nzchar(input$HOURLY_MAP_SELECT %||% "")
     )
     
+    observe({
+      missing_ids <- c()
+      
+      if (!nzchar(input$REGION %||% "")) missing_ids <- c(missing_ids, "REGION")
+      if (!nzchar(input$FOREST %||% "")) missing_ids <- c(missing_ids, "FOREST")
+      if (!nzchar(input$BURN_NAME %||% "")) missing_ids <- c(missing_ids, "BURN_NAME")
+      if (!nzchar(input$RUN_ID %||% "")) missing_ids <- c(missing_ids, "RUN_ID")
+      
+      all_ids <- c("REGION", "FOREST", "BURN_NAME", "RUN_ID")
+      
+      shinyjs::runjs(sprintf(
+        "
+    const allIds = %s;
+    const missingIds = %s;
+
+    allIds.forEach(function(id) {
+      $('[id=\"' + id + '\"].shiny-bound-input')
+        .closest('.form-group')
+        .removeClass('required-missing');
+    });
+
+    missingIds.forEach(function(id) {
+      $('[id=\"' + id + '\"].shiny-bound-input')
+        .closest('.form-group')
+        .addClass('required-missing');
+    });
+    ",
+        jsonlite::toJSON(all_ids, auto_unbox = TRUE),
+        jsonlite::toJSON(missing_ids, auto_unbox = TRUE)
+      ))
+    })
+    
     r8_ready <- TRUE
     
     if (identical(input$REGION, "08")) {
