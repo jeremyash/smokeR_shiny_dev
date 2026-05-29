@@ -71,9 +71,18 @@ download_data_uri <- function(url, mime = "image/png") {
   )
 }
 
-fire_icon_uri <- make_data_uri(here::here("smokeR_dev", "red-fire-flame.png"))
-fwd_img_uri <- make_data_uri(here::here("smokeR_dev", "fwd.png"))
-fasm_img_uri <- make_data_uri(here::here("smokeR_dev", "fasm.png"))
+fire_icon_uri <- make_data_uri(
+  here::here("smokeR_dev", "assets", "red-fire-flame.png")
+)
+
+fwd_img_uri <- make_data_uri(
+  here::here("smokeR_dev", "assets", "fwd.png")
+)
+
+fasm_img_uri <- make_data_uri(
+  here::here("smokeR_dev", "assets", "fasm.png")
+)
+
 report_icon_uri <- make_data_uri(
   here::here("smokeR_dev", "www", "favicon_512x512_rounded.png")
 )
