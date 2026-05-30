@@ -21,13 +21,16 @@ require(here)
 # LOAD DATA ----------------------------------------------
 
 # source helper functions
+source("R/constants.R")
+
 source("R/helpers.R")
+source("R/ui_helpers.R")
+source("R/validation_helpers.R")
+
+source("R/filename_helpers.R")
 source("R/github_helpers.R")
 source("R/log_helpers.R")
-source("R/filename_helpers.R")
 source("R/pb_helpers.R")
-source("R/constants.R")
-source("R/validation_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
@@ -325,20 +328,9 @@ server <- function(input, output, session) {
   
   # SERVER: Forest selector ---------------------------------
   output$FOREST <- renderUI({
-    req(nzchar(input$REGION))
-    
-    forest_choices <- nfs %>%
-      dplyr::filter(region == input$REGION) %>%
-      dplyr::pull(forests)
-    
-    selectizeInput(
-      "FOREST",
-      "Forest:",
-      choices = c("Select a forest" = "", forest_choices),
-      selected = "",
-      options = list(
-        placeholder = "Select a forest"
-      )
+    build_forest_selector_ui(
+      region = input$REGION,
+      nfs = nfs
     )
   })
   
@@ -402,46 +394,14 @@ server <- function(input, output, session) {
   
   # SERVER: Region 8 conditional inputs ---------------------
   output$REGION_08_OPTIONS <- renderUI({
-    if (is.null(input$REGION) || input$REGION != "08") {
-      return(NULL)
-    }
-    
-    tagList(
-      tags$div(class = "app-section-title", "Region 8 options"),
-      selectInput(
-        "FORECAST_AQI_SELECT",
-        "Forecasted AQI downwind of ignition",
-        choices = AQI_CHOICES,
-        selected = isolate(input$FORECAST_AQI_SELECT %||% "Good")
-      ),
-      selectInput(
-        "SUPERFOG_SCREEN_SELECT",
-        "Potential for superfog formation?",
-        choices = c("No", "Yes"),
-        selected = isolate(input$SUPERFOG_SCREEN_SELECT %||% "No")
-      )
-    )
+    build_region_08_options_ui(input)
   })
   
   # Optional PB Piedmont hourly output upload. This is intentionally separate
   # from REGION_08_OPTIONS so it can appear/disappear without recreating the
   # superfog selectInput and resetting it back to "No".
   output$PB_HOURLY_UPLOAD <- renderUI({
-    req(input$REGION)
-    
-    if (
-      input$REGION == "08" &&
-      !is.null(input$SUPERFOG_SCREEN_SELECT) &&
-      input$SUPERFOG_SCREEN_SELECT == "Yes"
-    ) {
-      fileInput(
-        "PB_HOURLY_ZIP",
-        "Upload PB Piedmont hourly_output.zip here (optional)",
-        accept = c(".zip", "application/zip", "application/x-zip-compressed")
-      )
-    } else {
-      NULL
-    }
+    build_pb_hourly_upload_ui(input)
   })
   
   
@@ -512,6 +472,18 @@ server <- function(input, output, session) {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
+        report_filename <- make_report_filename(
+          burn_name = input$BURN_NAME,
+          forest = input$FOREST
+        )
+        
+        rendered_file <- file.path(tempdir(), report_filename)
+        
+        log_row_file <- file.path(
+          tempdir(),
+          paste0(tools::file_path_sans_ext(report_filename), "_log_row.rds")
+        )
+        
         params_ls <- list(
           BURN_NAME = input$BURN_NAME,
           FOREST = input$FOREST,
@@ -534,15 +506,9 @@ server <- function(input, output, session) {
           SUPERFOG_SCREEN_SELECT = if (input$REGION == "08") input$SUPERFOG_SCREEN_SELECT else NULL,
           LOG_SHEET_URL = get_log_sheet_url(),
           REPORT_URL = NULL,
-          PB_MAP_URL = NULL
+          PB_MAP_URL = NULL,
+          LOG_ROW_FILE = log_row_file
         )
-        
-        report_filename <- make_report_filename(
-          burn_name = input$BURN_NAME,
-          forest = input$FOREST
-        )
-        
-        rendered_file <- file.path(tempdir(), report_filename)
         
         report_url <- make_github_pages_url(
           owner = APP_OWNER,
@@ -645,6 +611,38 @@ server <- function(input, output, session) {
           
           message("Report uploaded and index updated: ", report_url)
           
+          tryCatch(
+            {
+              if (!file.exists(log_row_file)) {
+                stop("Smoke report log row file was not created: ", log_row_file)
+              }
+              
+              log_row <- readRDS(log_row_file)
+              
+              append_smoke_app_log(
+                sheet_url = LOG_SHEET_URL,
+                report_type = log_row$report_type,
+                region = log_row$region,
+                forest = log_row$forest,
+                burn_name = log_row$burn_name,
+                burn_date = log_row$burn_date,
+                date_issued = log_row$date_issued,
+                lat = log_row$lat,
+                lon = log_row$lon,
+                acreage = log_row$acreage,
+                run_id = log_row$run_id,
+                superfog_potential = log_row$superfog_potential,
+                report_url = report_url,
+                pb_map_url = log_row$pb_map_url
+              )
+              
+              message("Smoke report logged successfully")
+            },
+            error = function(e) {
+              message("Smoke report log failed: ", conditionMessage(e))
+            }
+          )
+          
           TRUE
           
         }, error = function(e) {
@@ -663,90 +661,12 @@ server <- function(input, output, session) {
   
   # SERVER: GitHub Pages link displays ----------------------
   output$report_link_ui <- renderUI({
-    req(report_link())
-    
-    tags$div(
-      style = "
-      margin: 18px 0 24px 0;
-      padding: 16px 18px;
-      border: 2px solid #4CAF50;
-      border-radius: 8px;
-      background: #f3fff3;
-      font-size: 18px;
-    ",
-      
-      tags$div(
-        style = "font-weight:700; font-size:22px; margin-bottom:8px;",
-        "Report available online"
-      ),
-      
-      tags$div(
-        style = "font-size:14px; color:#666; margin-bottom:10px;",
-        "Note: the link may take 20-60 seconds to become available."
-      ),
-      
-      tags$div(
-        style = "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
-        tags$a(
-          href = report_link(),
-          target = "_blank",
-          style = "word-break:break-all; font-size:18px;",
-          report_link()
-        ),
-        tags$button(
-          type = "button",
-          class = "btn btn-success",
-          onclick = sprintf(
-            "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
-            report_link()
-          ),
-          "Copy URL"
-        )
-      )
-    )
+    build_report_link_ui(report_link())
   })
-  
   
   ### link to standalone PB Piedmont map on GitHub Pages
   output$pb_only_link_ui <- renderUI({
-    req(pb_only_map_link())
-    
-    tags$div(
-      style = "
-      margin: 18px 0 24px 0;
-      padding: 16px 18px;
-      border: 2px solid #4CAF50;
-      border-radius: 8px;
-      background: #f3fff3;
-      font-size: 18px;
-    ",
-      tags$div(
-        style = "font-weight:700; font-size:22px; margin-bottom:8px;",
-        "PB Piedmont map available online"
-      ),
-      tags$div(
-        style = "font-size:14px; color:#666; margin-bottom:10px;",
-        "Note: the link may take 20-60 seconds to become available."
-      ),
-      tags$div(
-        style = "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
-        tags$a(
-          href = pb_only_map_link(),
-          target = "_blank",
-          style = "word-break:break-all; font-size:18px;",
-          pb_only_map_link()
-        ),
-        tags$button(
-          type = "button",
-          class = "btn btn-success",
-          onclick = sprintf(
-            "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
-            pb_only_map_link()
-          ),
-          "Copy URL"
-        )
-      )
-    )
+    build_pb_link_ui(pb_only_map_link())
   })
   
   

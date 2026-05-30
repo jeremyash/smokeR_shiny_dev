@@ -23,6 +23,7 @@ params:
   LOG_SHEET_URL: NA
   REPORT_URL: NA
   PB_MAP_URL: NA
+  LOG_ROW_FILE: NA
 ---
 
 ```{r setup, include=FALSE}
@@ -1434,12 +1435,8 @@ cat(
 ```
 
 
-```{r log_file, include = FALSE, echo = FALSE, message = FALSE}
-
-tryCatch(
-  {
-  append_smoke_app_log(
-  sheet_url = params$LOG_SHEET_URL,
+```{r log_file, include = FALSE, echo = FALSE}
+log_row <- list(
   report_type = "Smoke Report",
   region = params$REGION,
   forest = params$FOREST,
@@ -1454,12 +1451,5 @@ tryCatch(
   report_url = params$REPORT_URL,
   pb_map_url = params$PB_MAP_URL
 )
-    message("Smoke report logged successfully")
-  },
-  error = function(e) {
-    message("Smoke report log failed: ", conditionMessage(e))
-  }
-)
 
-
-```
+saveRDS(log_row, params$LOG_ROW_FILE)

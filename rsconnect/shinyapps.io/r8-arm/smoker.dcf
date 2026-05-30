@@ -5,6 +5,6 @@ account: r8-arm
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 8026173
-bundleId: 12058048
+bundleId: 12058963
 url: https://r8-arm.shinyapps.io/smoker/
 version: 1

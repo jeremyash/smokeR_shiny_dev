@@ -200,3 +200,36 @@ body {
   font-size: 14px;
   color: #4a3a1a;
 }
+
+.success-link-card {
+  margin: 18px 0 24px 0;
+  padding: 16px 18px;
+  border: 2px solid #4CAF50;
+  border-radius: 8px;
+  background: #f3fff3;
+  font-size: 18px;
+}
+
+.success-link-title {
+  font-weight: 700;
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.success-link-note {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.success-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.success-link-row a {
+  word-break: break-all;
+  font-size: 18px;
+}
