@@ -1,5 +1,5 @@
 ---
-title: ""
+title: "`r params$BURN_NAME` - Smoke Report"
 output:
   html_document: 
     toc: TRUE

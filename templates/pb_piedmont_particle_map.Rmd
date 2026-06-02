@@ -1,5 +1,5 @@
 ---
-title: ""
+title: "`r params$BURN_NAME` - PB Piedmont Output"
 output:
   html_document:
     self_contained: true
