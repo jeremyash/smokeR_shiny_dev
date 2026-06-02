@@ -54,3 +54,19 @@ append_smoke_app_log <- function(
     data = log_row
   )
 }
+
+safe_append_smoke_app_log <- function(..., context = "Smoke app log") {
+  
+  tryCatch(
+    {
+      append_smoke_app_log(...)
+      message(context, " succeeded")
+      TRUE
+    },
+    error = function(e) {
+      message(context, " failed: ", conditionMessage(e))
+      FALSE
+    }
+  )
+  
+}

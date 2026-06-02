@@ -433,26 +433,18 @@ server <- function(input, output, session) {
       
       pb_only_map_link(pb_url)
       
-      tryCatch(
-        {
-          append_smoke_app_log(
-            sheet_url = LOG_SHEET_URL,
-            report_type = "Standalone PB Piedmont Map",
-            region = "08",
-            forest = input$PB_ONLY_FOREST,
-            burn_name = input$PB_ONLY_BURN_NAME,
-            burn_date = Sys.Date(),
-            date_issued = Sys.Date(),
-            lat = input$PB_ONLY_LAT,
-            lon = input$PB_ONLY_LON,
-            pb_map_url = pb_url
-          )
-          message("PB Piedmont map logged successfully")
-          
-        },
-        error = function(e) {
-          message("Standalone PB Piedmont log failed: ", conditionMessage(e))
-        }
+      safe_append_smoke_app_log(
+        sheet_url = LOG_SHEET_URL,
+        report_type = "Standalone PB Piedmont Map",
+        region = "08",
+        forest = input$PB_ONLY_FOREST,
+        burn_name = input$PB_ONLY_BURN_NAME,
+        burn_date = Sys.Date(),
+        date_issued = Sys.Date(),
+        lat = input$PB_ONLY_LAT,
+        lon = input$PB_ONLY_LON,
+        pb_map_url = pb_url,
+        context = "Standalone PB Piedmont log"
       )
       
       
