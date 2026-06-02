@@ -611,7 +611,7 @@ server <- function(input, output, session) {
               
               log_row <- readRDS(log_row_file)
               
-              append_smoke_app_log(
+              safe_append_smoke_app_log(
                 sheet_url = LOG_SHEET_URL,
                 report_type = log_row$report_type,
                 region = log_row$region,
@@ -625,10 +625,9 @@ server <- function(input, output, session) {
                 run_id = log_row$run_id,
                 superfog_potential = log_row$superfog_potential,
                 report_url = report_url,
-                pb_map_url = log_row$pb_map_url
+                pb_map_url = log_row$pb_map_url,
+                context = "Smoke report log"
               )
-              
-              message("Smoke report logged successfully")
             },
             error = function(e) {
               message("Smoke report log failed: ", conditionMessage(e))
