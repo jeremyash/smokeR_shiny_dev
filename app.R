@@ -592,7 +592,7 @@ server <- function(input, output, session) {
             repo = APP_REPO,
             report_filename = report_filename,
             report_label = paste(
-              format(Sys.Date(), "%Y-%m-%d"),
+              format(Sys.time(), "%Y-%m-%d %H:%M"),
               "-",
               input$FOREST,
               "-",

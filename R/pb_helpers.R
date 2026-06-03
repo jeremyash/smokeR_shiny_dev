@@ -79,7 +79,7 @@ create_pb_piedmont_map <- function(
         repo = repo,
         report_filename = pb_map_filename,
         report_label = paste(
-          format(Sys.Date(), "%Y-%m-%d"),
+          format(Sys.time(), "%Y-%m-%d %H:%M"),
           "-",
           forest,
           "-",
