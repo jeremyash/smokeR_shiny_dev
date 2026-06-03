@@ -72,6 +72,31 @@ create_pb_piedmont_map <- function(
     )
   )
   
+  tryCatch(
+    {
+      update_index_page(
+        owner = owner,
+        repo = repo,
+        report_filename = pb_map_filename,
+        report_label = paste(
+          format(Sys.Date(), "%Y-%m-%d"),
+          "-",
+          forest,
+          "-",
+          burn_name
+        ),
+        report_type = "pb",
+        branch = branch
+      )
+      
+      message("PB Piedmont index updated successfully")
+    },
+    error = function(e) {
+      message("PB Piedmont index update failed: ", conditionMessage(e))
+    }
+  )
+  
+  
   list(
     url = pb_map_url,
     filename = pb_map_filename,

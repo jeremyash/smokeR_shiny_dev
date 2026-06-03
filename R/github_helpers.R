@@ -138,8 +138,22 @@ update_index_page <- function(
   
   if (report_type == "report") {
     href <- paste0("reports/", report_filename)
-    start_marker <- "<!-- REPORT_ENTRIES_START -->"
-    end_marker <- "<!-- REPORT_ENTRIES_END -->"
+    if (report_type == "report") {
+      
+      href <- paste0("reports/", report_filename)
+      
+      start_marker <- "<!-- ===== BEGIN AUTO-GENERATED SMOKE REPORT LINKS ===== -->"
+      
+      empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
+      
+    } else {
+      
+      href <- paste0("pb-piedmont/", report_filename)
+      
+      start_marker <- "<!-- ===== BEGIN AUTO-GENERATED PB PIEDMONT LINKS ===== -->"
+      
+      empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
+    }
     empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
   } else {
     href <- paste0("pb-piedmont/", report_filename)
@@ -153,9 +167,6 @@ update_index_page <- function(
     "      <a href='", href, "' target='_blank'>",
     htmltools::htmlEscape(report_label),
     "</a>\n",
-    "      <div class='report-file'>",
-    htmltools::htmlEscape(report_filename),
-    "</div>\n",
     "    </div>\n"
   )
   

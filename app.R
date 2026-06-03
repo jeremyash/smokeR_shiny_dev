@@ -592,11 +592,11 @@ server <- function(input, output, session) {
             repo = APP_REPO,
             report_filename = report_filename,
             report_label = paste(
+              format(Sys.Date(), "%Y-%m-%d"),
+              "-",
               input$FOREST,
               "-",
-              input$BURN_NAME,
-              "-",
-              format(Sys.time(), "%Y-%m-%d %H:%M")
+              input$BURN_NAME
             ),
             report_type = "report",
             branch = APP_BRANCH

@@ -449,11 +449,17 @@ forecast_aqi_sen <- if(burn_info$region == "08") {paste("**The forecasted AQI fo
                                                                       sep = "")} else{""}
 
 # superfog statement
+pb_map_available <- is.character(params$PB_MAP_URL) &&
+  length(params$PB_MAP_URL) == 1 &&
+  !is.na(params$PB_MAP_URL) &&
+  nzchar(trimws(params$PB_MAP_URL)) &&
+  grepl("^https?://", params$PB_MAP_URL)
+
 superfog_sen <- if (burn_info$region == "08") {
   
   if (params$SUPERFOG_SCREEN_SELECT == "Yes") {
     
-    if (!is.null(params$PB_MAP_URL) && !is.na(params$PB_MAP_URL) && nzchar(params$PB_MAP_URL)) {
+    if (pb_map_available) {
       paste0(
   "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
   "Please see the PB Piedmont output below to review nighttime dispersion and areas with elevated chances of superfog formation."
@@ -1356,10 +1362,8 @@ if (params$REGION == "08") {
 ```{r pb_piedmont_card, results='asis', echo=FALSE}
 if (
   params$REGION == "08" &&
-  params$SUPERFOG_SCREEN_SELECT == "Yes" &&
-  !is.null(params$PB_MAP_URL) &&
-  !is.na(params$PB_MAP_URL) &&
-  nzchar(params$PB_MAP_URL)
+  identical(params$SUPERFOG_SCREEN_SELECT, "Yes") &&
+  isTRUE(pb_map_available)
 ) {
   cat(
     paste0(
