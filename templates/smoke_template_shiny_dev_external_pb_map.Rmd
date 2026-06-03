@@ -1,5 +1,5 @@
 ---
-title: "`r params$BURN_NAME` - Smoke Report"
+title: ""
 output:
   html_document: 
     toc: TRUE
@@ -475,6 +475,21 @@ superfog_sen <- if (burn_info$region == "08") {
 ```
 
 ```{r title_banner, results='asis', echo=FALSE}
+
+browser_title <- paste(params$BURN_NAME, "- Smoke Report")
+
+cat(
+  paste0(
+    "<script>",
+    "document.addEventListener('DOMContentLoaded', function() {",
+    "document.title = ",
+    jsonlite::toJSON(browser_title, auto_unbox = TRUE),
+    ";",
+    "});",
+    "</script>"
+  )
+)
+
 cat(
   paste0(
     '<div class="report-title-banner">',
@@ -492,6 +507,7 @@ cat(
     '</div>'
   )
 )
+
 ```
 
 <div class="report-issued">`r generated_at_sen`</div>
