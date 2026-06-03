@@ -1,5 +1,4 @@
 create_pb_piedmont_map <- function(
-    issued_at = Sys.time(),
     burn_name,
     forest,
     run_id = NA,
@@ -12,6 +11,9 @@ create_pb_piedmont_map <- function(
     branch = "main",
     pages_dir = "docs/pb-piedmont"
 ) {
+  
+  issued_at <- Sys.time()
+  
   burn_name_for_file <- burn_name |>
     as.character() |>
     safe_filename()
