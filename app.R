@@ -588,8 +588,8 @@ server <- function(input, output, session) {
           report_link(report_url)
           
           update_index_page(
-            owner = "jeremyash",
-            repo = "smoke_reports",
+            owner = APP_OWNER,
+            repo = APP_REPO,
             report_filename = report_filename,
             report_label = paste(
               input$FOREST,
@@ -598,7 +598,8 @@ server <- function(input, output, session) {
               "-",
               format(Sys.time(), "%Y-%m-%d %H:%M")
             ),
-            branch = "main"
+            report_type = "report",
+            branch = APP_BRANCH
           )
           
           message("Report uploaded and index updated: ", report_url)

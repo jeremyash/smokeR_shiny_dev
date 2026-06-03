@@ -111,8 +111,11 @@ update_index_page <- function(
     repo,
     report_filename,
     report_label,
+    report_type = c("report", "pb"),
     branch = "main"
 ) {
+  report_type <- match.arg(report_type)
+  
   token <- get_github_pat()
   
   if (identical(token, "")) {
@@ -121,65 +124,49 @@ update_index_page <- function(
   
   index_path <- "docs/index.html"
   
-  existing <- tryCatch(
-    gh::gh(
-      "GET /repos/{owner}/{repo}/contents/{path}",
-      owner = owner,
-      repo = repo,
-      path = index_path,
-      ref = branch,
-      .token = token
-    ),
-    error = function(e) NULL
+  existing <- gh::gh(
+    "GET /repos/{owner}/{repo}/contents/{path}",
+    owner = owner,
+    repo = repo,
+    path = index_path,
+    ref = branch,
+    .token = token
   )
   
-  if (!is.null(existing)) {
-    index_html <- rawToChar(base64enc::base64decode(existing$content))
-    sha <- existing$sha
+  index_html <- rawToChar(base64enc::base64decode(existing$content))
+  sha <- existing$sha
+  
+  if (report_type == "report") {
+    href <- paste0("reports/", report_filename)
+    start_marker <- "<!-- REPORT_ENTRIES_START -->"
+    end_marker <- "<!-- REPORT_ENTRIES_END -->"
+    empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
   } else {
-    index_html <- paste0(
-      "<!doctype html>\n",
-      "<html>\n",
-      "<head>\n",
-      "  <meta charset='utf-8'>\n",
-      "  <title>Smoke Reports</title>\n",
-      "</head>\n",
-      "<body>\n",
-      "  <h1>Smoke Reports</h1>\n",
-      "  <ul>\n",
-      "  </ul>\n",
-      "</body>\n",
-      "</html>\n"
-    )
-    sha <- NULL
+    href <- paste0("pb-piedmont/", report_filename)
+    start_marker <- "<!-- PB_ENTRIES_START -->"
+    end_marker <- "<!-- PB_ENTRIES_END -->"
+    empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
   }
   
   new_entry <- paste0(
-    "    <li>",
-    "<a href='reports/", report_filename, "' target='_blank'>",
+    "    <div class='report-entry'>\n",
+    "      <a href='", href, "' target='_blank'>",
     htmltools::htmlEscape(report_label),
-    "</a>",
-    "<br><span style='font-size:12px; color:#666;'>",
+    "</a>\n",
+    "      <div class='report-file'>",
     htmltools::htmlEscape(report_filename),
-    "</span>",
-    "</li>\n"
+    "</div>\n",
+    "    </div>\n"
   )
   
-  if (grepl("</ul>", index_html, fixed = TRUE)) {
-    index_html <- sub(
-      "</ul>",
-      paste0(new_entry, "</ul>"),
-      index_html,
-      fixed = TRUE
-    )
-  } else {
-    index_html <- paste0(
-      index_html,
-      "\n<ul>\n",
-      new_entry,
-      "</ul>\n"
-    )
-  }
+  index_html <- gsub(empty_pattern, "", index_html, perl = TRUE)
+  
+  index_html <- sub(
+    start_marker,
+    paste0(start_marker, "\n", new_entry),
+    index_html,
+    fixed = TRUE
+  )
   
   gh::gh(
     "PUT /repos/{owner}/{repo}/contents/{path}",
