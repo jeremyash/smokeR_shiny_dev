@@ -7,6 +7,7 @@ PB_PAGES_DIR <- "docs/pb-piedmont"
 
 REGION_CHOICES <- c(
   "Select a Region" = "",
+  "01",
   "02",
   "03",
   "04",
