@@ -96,6 +96,10 @@ temp_mon_icon_uri <- download_data_uri(
   "https://github.com/jeremyash/icons/blob/main/temp_mon.png?raw=true"
 )
 
+pb_preview_uri <- make_data_uri(
+  here::here("assets", "pb_piedmont_preview.jpg"),
+  mime = "image/jpeg"
+)
 
 ```
 
@@ -451,10 +455,9 @@ superfog_sen <- if (burn_info$region == "08") {
     
     if (!is.null(params$PB_MAP_URL) && !is.na(params$PB_MAP_URL) && nzchar(params$PB_MAP_URL)) {
       paste0(
-        "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
-        "Please see separate modeling output from PB Piedmont to look at nighttime dispersion and areas with elevated chances of superfog formation: ",
-        "<a href='", params$PB_MAP_URL, "' target='_blank'>PB Piedmont map</a>."
-      )
+  "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
+  "Please see the PB Piedmont output below to review nighttime dispersion and areas with elevated chances of superfog formation."
+)
     } else {
       paste0(
         "The spot weather forecast indicates there is potential for superfog formation in the overnight hours. ",
@@ -1350,6 +1353,26 @@ if (params$REGION == "08") {
 }
 ```
 
+```{r pb_piedmont_card, results='asis', echo=FALSE}
+if (
+  params$REGION == "08" &&
+  params$SUPERFOG_SCREEN_SELECT == "Yes" &&
+  !is.null(params$PB_MAP_URL) &&
+  !is.na(params$PB_MAP_URL) &&
+  nzchar(params$PB_MAP_URL)
+) {
+  cat(
+    paste0(
+      '<div class="pb-card-wrap">',
+        '<div class="pb-card">',
+          '<img src="', pb_preview_uri, '" alt="PB Piedmont Output">',
+          '<a href="', params$PB_MAP_URL, '" target="_blank">PB Piedmont Output</a>',
+        '</div>',
+      '</div>'
+    )
+  )
+}
+```
 
 
 ## Meteorological and Air Quality Conditions
@@ -1424,6 +1447,55 @@ fasm_url <- paste0("https://fire.airnow.gov/#6.91/",
   }
 
   .link-card {
+    height: 190px;
+  }
+}
+
+.pb-card-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 24px 0;
+}
+
+.pb-card {
+  position: relative;
+  width: 60%;
+  max-width: 700px;
+  height: 220px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #cccccc;
+  background: #000000;
+}
+
+.pb-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.45;
+}
+
+.pb-card a {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white !important;
+  font-size: 28px;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+  padding: 14px;
+}
+
+.pb-card a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+  .pb-card {
+    width: 100%;
     height: 190px;
   }
 }
