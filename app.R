@@ -464,9 +464,12 @@ server <- function(input, output, session) {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
+        issued_at <- Sys.time()
+        
         report_filename <- make_report_filename(
           burn_name = input$BURN_NAME,
-          forest = input$FOREST
+          forest = input$FOREST,
+          issued_time = issued_at
         )
         
         rendered_file <- file.path(tempdir(), report_filename)
@@ -592,13 +595,15 @@ server <- function(input, output, session) {
             repo = APP_REPO,
             report_filename = report_filename,
             report_label = paste(
-              format(Sys.time(), "%Y-%m-%d %H:%M"),
+              format(issued_at, "%Y-%m-%d %H:%M"),
               "-",
               input$FOREST,
               "-",
               input$BURN_NAME
             ),
             report_type = "report",
+            region = sprintf("R%02d", as.integer(input$REGION)),
+            issued_at = issued_at,
             branch = APP_BRANCH
           )
           

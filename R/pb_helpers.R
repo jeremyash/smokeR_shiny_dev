@@ -1,4 +1,5 @@
 create_pb_piedmont_map <- function(
+    issued_at = Sys.time(),
     burn_name,
     forest,
     run_id = NA,
@@ -21,7 +22,8 @@ create_pb_piedmont_map <- function(
   
   pb_map_filename <- make_pb_filename(
     burn_name = burn_name,
-    forest = forest
+    forest = forest,
+    issued_time = issued_at
   )
   
   pb_zip_copy <- file.path(
@@ -79,13 +81,15 @@ create_pb_piedmont_map <- function(
         repo = repo,
         report_filename = pb_map_filename,
         report_label = paste(
-          format(Sys.time(), "%Y-%m-%d %H:%M"),
+          format(issued_at, "%Y-%m-%d %H:%M"),
           "-",
           forest,
           "-",
           burn_name
         ),
         report_type = "pb",
+        region = "R08",
+        issued_at = issued_at,
         branch = branch
       )
       
