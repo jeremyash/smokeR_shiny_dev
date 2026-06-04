@@ -112,6 +112,8 @@ update_index_page <- function(
     report_filename,
     report_label,
     report_type = c("report", "pb"),
+    region = NULL,
+    issued_at = Sys.time(),
     branch = "main"
 ) {
   report_type <- match.arg(report_type)
@@ -138,32 +140,30 @@ update_index_page <- function(
   
   if (report_type == "report") {
     href <- paste0("reports/", report_filename)
-    if (report_type == "report") {
-      
-      href <- paste0("reports/", report_filename)
-      
-      start_marker <- "<!-- ===== BEGIN AUTO-GENERATED SMOKE REPORT LINKS ===== -->"
-      
-      empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
-      
-    } else {
-      
-      href <- paste0("pb-piedmont/", report_filename)
-      
-      start_marker <- "<!-- ===== BEGIN AUTO-GENERATED PB PIEDMONT LINKS ===== -->"
-      
-      empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
-    }
+    start_marker <- "<!-- ===== BEGIN AUTO-GENERATED SMOKE REPORT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
   } else {
     href <- paste0("pb-piedmont/", report_filename)
-    start_marker <- "<!-- PB_ENTRIES_START -->"
-    end_marker <- "<!-- PB_ENTRIES_END -->"
+    start_marker <- "<!-- ===== BEGIN AUTO-GENERATED PB PIEDMONT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
   }
   
+  if (!grepl(start_marker, index_html, fixed = TRUE)) {
+    stop("Index start marker not found: ", start_marker)
+  }
+  
+  region_label <- if (!is.null(region) && nzchar(region)) {
+    region
+  } else {
+    "Unknown Region"
+  }
+  
+  issued_label <- format(issued_at, "%Y-%m-%dT%H:%M:%S")
+  
   new_entry <- paste0(
-    "    <div class='report-entry'>\n",
+    "    <div class='report-entry' ",
+    "data-region='", htmltools::htmlEscape(region_label), "' ",
+    "data-issued='", htmltools::htmlEscape(issued_label), "'>\n",
     "      <a href='", href, "' target='_blank'>",
     htmltools::htmlEscape(report_label),
     "</a>\n",
