@@ -378,6 +378,34 @@ h1.title {
 .pb-slider-control input[type='range'] {
   width: 300px;
 }
+
+.pb-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pb-step-button {
+  width: 34px;
+  height: 30px;
+  border: 1px solid #b8c5cf;
+  border-radius: 6px;
+  background: #032B5B;
+  color: white;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pb-step-button:hover {
+  background: #0B3D73;
+}
+
+.pb-step-button:disabled {
+  background: #c9d2da;
+  border-color: #c9d2da;
+  cursor: not-allowed;
+}
 </style>
 
 ```{r pb_browser_title, results='asis', echo=FALSE}
@@ -539,7 +567,11 @@ pb_map %>%
         div.innerHTML = `
           <div class='pb-slider-title'>Time step (hour)</div>
           <div class='pb-slider-label' id='pb-label-${el.id}'></div>
-          <input id='pb-slider-${el.id}' type='range' min='0' max='${data.hours.length - 1}' value='0' step='1'>
+          <div class='pb-slider-row'>
+            <button type='button' class='pb-step-button' id='pb-prev-${el.id}' aria-label='Previous time step'>&#9664;</button>
+            <input id='pb-slider-${el.id}' type='range' min='0' max='${data.hours.length - 1}' value='0' step='1'>
+            <button type='button' class='pb-step-button' id='pb-next-${el.id}' aria-label='Next time step'>&#9654;</button>
+          </div>
         `;
 
         L.DomEvent.disableClickPropagation(div);
@@ -550,16 +582,39 @@ pb_map %>%
       sliderControl.addTo(map);
 
       var slider = document.getElementById('pb-slider-' + el.id);
+      var prevButton = document.getElementById('pb-prev-' + el.id);
+      var nextButton = document.getElementById('pb-next-' + el.id);
+
+      function setStep(index) {
+        var maxIndex = data.hours.length - 1;
+        var newIndex = Math.max(0, Math.min(maxIndex, index));
+
+        slider.value = newIndex;
+        redrawParticles(newIndex);
+
+        if (prevButton) prevButton.disabled = newIndex === 0;
+        if (nextButton) nextButton.disabled = newIndex === maxIndex;
+      }
 
       slider.addEventListener('input', function(e) {
-        redrawParticles(parseInt(e.target.value));
+        setStep(parseInt(e.target.value));
       });
 
       slider.addEventListener('change', function(e) {
-        redrawParticles(parseInt(e.target.value));
+        setStep(parseInt(e.target.value));
       });
 
-      redrawParticles(0);
+      prevButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        setStep(parseInt(slider.value) - 1);
+      });
+
+      nextButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        setStep(parseInt(slider.value) + 1);
+      });
+
+      setStep(0);
     }
     ",
     data = list(
