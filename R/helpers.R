@@ -2,6 +2,19 @@
   if (is.null(x)) y else x
 }
 
+get_burn_issued_time <- function(lat, lon) {
+  burn_tz <- lutz::tz_lookup_coords(
+    lat = lat,
+    lon = lon,
+    method = "fast"
+  )
+  
+  lubridate::with_tz(
+    Sys.time(),
+    tzone = burn_tz
+  )
+}
+
 get_burn_meta_from_run <- function(run_id) {
   
   serv1_link <- paste0(
