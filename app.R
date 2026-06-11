@@ -415,6 +415,11 @@ server <- function(input, output, session) {
     
     pb_only_map_link(NULL)
     
+    issued_at <- get_burn_issued_time(
+      lat = input$PB_ONLY_LAT,
+      lon = input$PB_ONLY_LON
+    )
+    
     withProgress(message = "Creating PB Piedmont map...", value = 0, {
       
       incProgress(0.15, detail = "Preparing PB Piedmont map parameters")
@@ -426,7 +431,8 @@ server <- function(input, output, session) {
         pb_zip_datapath = input$PB_ONLY_HOURLY_ZIP$datapath,
         pb_zip_name = input$PB_ONLY_HOURLY_ZIP$name,
         burn_lat = input$PB_ONLY_LAT,
-        burn_lon = input$PB_ONLY_LON
+        burn_lon = input$PB_ONLY_LON,
+        issued_at = issued_at
       )
       
       pb_url <- pb_result$url
@@ -439,8 +445,8 @@ server <- function(input, output, session) {
         region = "08",
         forest = input$PB_ONLY_FOREST,
         burn_name = input$PB_ONLY_BURN_NAME,
-        burn_date = Sys.Date(),
-        date_issued = Sys.Date(),
+        burn_date = as.Date(issued_at),
+        date_issued = as.Date(issued_at),
         lat = input$PB_ONLY_LAT,
         lon = input$PB_ONLY_LON,
         pb_map_url = pb_url,
@@ -464,11 +470,17 @@ server <- function(input, output, session) {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
-        issued_at <- Sys.time()
+        burn_meta <- get_burn_meta_from_run(input$RUN_ID)
+        
+        issued_at <- get_burn_issued_time(
+          lat = burn_meta$lat,
+          lon = burn_meta$lon
+        )
         
         report_filename <- make_report_filename(
           burn_name = input$BURN_NAME,
           forest = input$FOREST,
+          date = burn_meta$burn_date,
           issued_time = issued_at
         )
         
@@ -536,8 +548,9 @@ server <- function(input, output, session) {
               run_id = input$RUN_ID,
               pb_zip_datapath = input$PB_HOURLY_ZIP$datapath,
               pb_zip_name = input$PB_HOURLY_ZIP$name,
-              burn_lat = NA,
-              burn_lon = NA
+              burn_lat = burn_meta$lat,
+              burn_lon = burn_meta$lon,
+              issued_at = issued_at
             )
             
             pb_result$url
@@ -595,12 +608,12 @@ server <- function(input, output, session) {
             repo = APP_REPO,
             report_filename = report_filename,
             report_label = paste(
-              format(issued_at, "%Y-%m-%d %H:%M"),
+              paste0(format(issued_at, "%Y-%m-%d %H:%M"), " ", format(issued_at, "%Z")),
               "-",
               input$FOREST,
               "-",
               input$BURN_NAME
-            ),
+            ),,
             report_type = "report",
             region = sprintf("R%02d", as.integer(input$REGION)),
             issued_at = issued_at,

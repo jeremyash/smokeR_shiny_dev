@@ -2,6 +2,70 @@
   if (is.null(x)) y else x
 }
 
+get_burn_meta_from_run <- function(run_id) {
+  
+  serv1_link <- paste0(
+    "https://playground-1.airfire.org/bluesky-web-output/",
+    run_id,
+    "-dispersion"
+  )
+  
+  serv2_link <- paste0(
+    "https://playground-2.airfire.org/bluesky-web-output/",
+    run_id,
+    "-dispersion"
+  )
+  
+  serv_links_ls <- list(
+    serv1_link = serv1_link,
+    serv2_link = serv2_link
+  )
+  
+  date_info <- purrr::imap_dfr(
+    serv_links_ls,
+    function(link, server_name) {
+      if (!RCurl::url.exists(link)) {
+        return(tibble::tibble(
+          server = NA_character_,
+          end_time = as.POSIXct(NA)
+        ))
+      }
+      
+      end_time_val <- lubridate::as_datetime(
+        rjson::fromJSON(file = paste0(link, "/output.json"))$runtime[["end"]]
+      )
+      
+      tibble::tibble(
+        server = server_name,
+        end_time = end_time_val
+      )
+    }
+  )
+  
+  recent_server <- date_info |>
+    dplyr::filter(!is.na(server)) |>
+    dplyr::arrange(dplyr::desc(end_time)) |>
+    dplyr::slice(1) |>
+    dplyr::pull(server)
+  
+  if (length(recent_server) == 0 || is.na(recent_server)) {
+    stop("Could not find BlueSky output for run ID: ", run_id)
+  }
+  
+  results_output_link <- serv_links_ls[[recent_server]]
+  
+  burn_info <- read.csv(
+    paste0(results_output_link, "/output/data/fire_locations.csv")
+  )
+  
+  list(
+    lat = burn_info$latitude[1],
+    lon = burn_info$longitude[1],
+    burn_date = as.Date(lubridate::ymd(burn_info$date_time[1])),
+    results_output_link = results_output_link
+  )
+}
+
 safe_filename <- function(x) {
   x %>%
     as.character() %>%

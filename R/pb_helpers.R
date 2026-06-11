@@ -6,13 +6,19 @@ create_pb_piedmont_map <- function(
     pb_zip_name = "hourly_output.zip",
     burn_lat = NA,
     burn_lon = NA,
+    issued_at = NULL,
     owner = "jeremyash",
     repo = "smoke_reports",
     branch = "main",
     pages_dir = "docs/pb-piedmont"
 ) {
   
-  issued_at <- Sys.time()
+  if (is.null(issued_at)) {
+    issued_at <- get_burn_issued_time(
+      lat = burn_lat,
+      lon = burn_lon
+    )
+  }
   
   burn_name_for_file <- burn_name |>
     as.character() |>
