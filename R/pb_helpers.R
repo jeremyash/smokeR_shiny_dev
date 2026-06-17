@@ -80,15 +80,11 @@ create_pb_piedmont_map <- function(
         owner = owner,
         repo = repo,
         report_filename = pb_map_filename,
-        report_label = paste(
-          paste0(format(issued_at, "%Y-%m-%d %H:%M"), " ", format(issued_at, "%Z")),
-          "-",
-          forest,
-          "-",
-          burn_name
-        ),
         report_type = "pb",
         region = "R08",
+        forest = forest,
+        burn_name = burn_name,
+        burn_date = as.Date(issued_at),
         issued_at = issued_at,
         branch = branch
       )

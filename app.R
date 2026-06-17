@@ -607,15 +607,11 @@ server <- function(input, output, session) {
             owner = APP_OWNER,
             repo = APP_REPO,
             report_filename = report_filename,
-            report_label = paste(
-              paste0(format(issued_at, "%Y-%m-%d %H:%M"), " ", format(issued_at, "%Z")),
-              "-",
-              input$FOREST,
-              "-",
-              input$BURN_NAME
-            ),
             report_type = "report",
             region = sprintf("R%02d", as.integer(input$REGION)),
+            forest = input$FOREST,
+            burn_name = input$BURN_NAME,
+            burn_date = burn_meta$burn_date,
             issued_at = issued_at,
             branch = APP_BRANCH
           )

@@ -110,10 +110,12 @@ update_index_page <- function(
     owner,
     repo,
     report_filename,
-    report_label,
     report_type = c("report", "pb"),
-    region = NULL,
-    issued_at = Sys.time(),
+    region,
+    forest,
+    burn_name,
+    burn_date,
+    issued_at,
     branch = "main"
 ) {
   report_type <- match.arg(report_type)
@@ -140,10 +142,12 @@ update_index_page <- function(
   
   if (report_type == "report") {
     href <- paste0("sr/", report_filename)
+    product_label <- "Smoke Report"
     start_marker <- "<!-- ===== BEGIN AUTO-GENERATED SMOKE REPORT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
   } else {
     href <- paste0("pb/", report_filename)
+    product_label <- "PB Piedmont"
     start_marker <- "<!-- ===== BEGIN AUTO-GENERATED PB PIEDMONT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
   }
@@ -152,22 +156,23 @@ update_index_page <- function(
     stop("Index start marker not found: ", start_marker)
   }
   
-  region_label <- if (!is.null(region) && nzchar(region)) {
-    region
-  } else {
-    "Unknown Region"
-  }
-  
-  issued_label <- format(issued_at, "%Y-%m-%dT%H:%M:%S")
+  issued_label <- paste0(
+    format(issued_at, "%Y-%m-%d %H:%M"),
+    " ",
+    format(issued_at, "%Z")
+  )
   
   new_entry <- paste0(
     "    <div class='report-entry' ",
-    "data-region='", htmltools::htmlEscape(region_label), "' ",
-    "data-issued='", htmltools::htmlEscape(issued_label), "'>\n",
-    "      <a href='", href, "' target='_blank'>",
-    htmltools::htmlEscape(report_label),
-    "</a>\n",
-    "    </div>\n"
+    "data-product='", htmltools::htmlEscape(product_label), "' ",
+    "data-region='", htmltools::htmlEscape(region), "' ",
+    "data-forest='", htmltools::htmlEscape(forest), "' ",
+    "data-burn-name='", htmltools::htmlEscape(burn_name), "' ",
+    "data-burn-date='", htmltools::htmlEscape(as.character(burn_date)), "' ",
+    "data-issued='", htmltools::htmlEscape(format(issued_at, "%Y-%m-%dT%H:%M:%S")), "' ",
+    "data-issued-label='", htmltools::htmlEscape(issued_label), "' ",
+    "data-url='", htmltools::htmlEscape(href), "'>",
+    "</div>\n"
   )
   
   index_html <- gsub(empty_pattern, "", index_html, perl = TRUE)
