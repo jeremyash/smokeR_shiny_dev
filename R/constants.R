@@ -2,8 +2,8 @@ APP_OWNER <- "jeremyash"
 APP_REPO <- "smoke_reports"
 APP_BRANCH <- "main"
 
-REPORT_PAGES_DIR <- "docs/reports"
-PB_PAGES_DIR <- "docs/pb-piedmont"
+REPORT_PAGES_DIR <- "docs/sr"
+PB_PAGES_DIR <- "docs/pb"
 
 REGION_CHOICES <- c(
   "Select a Region" = "",

@@ -10,7 +10,7 @@ create_pb_piedmont_map <- function(
     owner = "jeremyash",
     repo = "smoke_reports",
     branch = "main",
-    pages_dir = "docs/pb-piedmont"
+    pages_dir = "docs/pb"
 ) {
   
   if (is.null(issued_at)) {
@@ -20,17 +20,9 @@ create_pb_piedmont_map <- function(
     )
   }
   
-  burn_name_for_file <- burn_name |>
-    as.character() |>
-    safe_filename()
-  
-  forest_short_for_file <- forest |>
-    as.character() |>
-    short_forest_name()
-  
   pb_map_filename <- make_pb_filename(
     burn_name = burn_name,
-    forest = forest,
+    date = as.Date(issued_at),
     issued_time = issued_at
   )
   
@@ -76,7 +68,7 @@ create_pb_piedmont_map <- function(
     commit_message = paste(
       burn_name,
       "| PB Piedmont |",
-      format(Sys.Date(), "%Y-%m-%d"),
+      format(issued_at, "%Y-%m-%d"),
       "|",
       forest
     )
@@ -89,7 +81,7 @@ create_pb_piedmont_map <- function(
         repo = repo,
         report_filename = pb_map_filename,
         report_label = paste(
-          format(issued_at, "%Y-%m-%d %H:%M"),
+          paste0(format(issued_at, "%Y-%m-%d %H:%M"), " ", format(issued_at, "%Z")),
           "-",
           forest,
           "-",
@@ -107,7 +99,6 @@ create_pb_piedmont_map <- function(
       message("PB Piedmont index update failed: ", conditionMessage(e))
     }
   )
-  
   
   list(
     url = pb_map_url,

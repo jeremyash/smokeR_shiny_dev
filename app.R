@@ -374,21 +374,29 @@ server <- function(input, output, session) {
   
   
   # SERVER: Download filenames ------------------------------
-  smoke_report_title <- reactive({
-    req(input$BURN_NAME, input$FOREST)
+  report_metadata <- reactive({
+    req(input$RUN_ID, input$BURN_NAME)
     
-    make_report_filename(
-      burn_name = input$BURN_NAME,
-      forest = input$FOREST
+    burn_meta <- get_burn_meta_from_run(input$RUN_ID)
+    
+    issued_at <- get_burn_issued_time(
+      lat = burn_meta$lat,
+      lon = burn_meta$lon
     )
-  })
-  
-  kmz_file <- reactive({
-    req(input$BURN_NAME, input$FOREST)
     
-    make_kmz_filename(
-      burn_name = input$BURN_NAME,
-      forest = input$FOREST
+    list(
+      burn_meta = burn_meta,
+      issued_at = issued_at,
+      report_filename = make_report_filename(
+        burn_name = input$BURN_NAME,
+        date = burn_meta$burn_date,
+        issued_time = issued_at
+      ),
+      kmz_filename = make_kmz_filename(
+        burn_name = input$BURN_NAME,
+        date = burn_meta$burn_date,
+        issued_time = issued_at
+      )
     )
   })
   
@@ -461,7 +469,7 @@ server <- function(input, output, session) {
   # SERVER: Smoke report workflow ---------------------------
   output$report <- downloadHandler(
     filename = function() {
-      smoke_report_title()
+      report_metadata()$report_filename
     },
     
     content = function(file) {
@@ -470,19 +478,11 @@ server <- function(input, output, session) {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
-        burn_meta <- get_burn_meta_from_run(input$RUN_ID)
+        meta <- report_metadata()
         
-        issued_at <- get_burn_issued_time(
-          lat = burn_meta$lat,
-          lon = burn_meta$lon
-        )
-        
-        report_filename <- make_report_filename(
-          burn_name = input$BURN_NAME,
-          forest = input$FOREST,
-          date = burn_meta$burn_date,
-          issued_time = issued_at
-        )
+        burn_meta <- meta$burn_meta
+        issued_at <- meta$issued_at
+        report_filename <- meta$report_filename
         
         rendered_file <- file.path(tempdir(), report_filename)
         
@@ -595,7 +595,7 @@ server <- function(input, output, session) {
             commit_message = paste(
               input$BURN_NAME,
               "|",
-              format(Sys.Date(), "%Y-%m-%d"),
+              format(issued_at, "%Y-%m-%d"),
               "|",
               input$FOREST
             )
@@ -613,7 +613,7 @@ server <- function(input, output, session) {
               input$FOREST,
               "-",
               input$BURN_NAME
-            ),,
+            ),
             report_type = "report",
             region = sprintf("R%02d", as.integer(input$REGION)),
             issued_at = issued_at,
@@ -684,7 +684,7 @@ server <- function(input, output, session) {
   output$kmz <- downloadHandler(
     # set up file names for downloads
     filename = function() {
-      kmz_file()
+      report_metadata()$kmz_filename
     },
     content = function(file) {
       # general dispersion results link

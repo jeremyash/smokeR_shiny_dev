@@ -3,7 +3,7 @@ upload_report_to_github_pages <- function(
     owner,
     repo,
     branch = "main",
-    pages_dir = "docs/reports",
+    pages_dir = "docs/sr",
     report_filename,
     commit_message = paste("Add smoke report", report_filename)
 ) {
@@ -139,11 +139,11 @@ update_index_page <- function(
   sha <- existing$sha
   
   if (report_type == "report") {
-    href <- paste0("reports/", report_filename)
+    href <- paste0("sr/", report_filename)
     start_marker <- "<!-- ===== BEGIN AUTO-GENERATED SMOKE REPORT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No reports available yet\\.\\s*</p>"
   } else {
-    href <- paste0("pb-piedmont/", report_filename)
+    href <- paste0("pb/", report_filename)
     start_marker <- "<!-- ===== BEGIN AUTO-GENERATED PB PIEDMONT LINKS ===== -->"
     empty_pattern <- "<p class=\"empty\">\\s*No PB Piedmont maps available yet\\.\\s*</p>"
   }
