@@ -857,16 +857,21 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
     .[grepl("^pm25_100m_hourly_GreyColorBar_[0-9]{12}\\.png$", .)] %>%
     sort()
 
-  hourly_df <- tibble(
-    file = hourly_png_files,
-    url = paste0(hourly_png_url, hourly_png_files)
+ hourly_df <- tibble(
+  file = hourly_png_files,
+  url = paste0(hourly_png_url, hourly_png_files)
+) %>%
+  mutate(
+    datetime_str = stringr::str_extract(file, "[0-9]{12}"),
+
+    # BlueSky hourly PNG filenames are UTC timestamps.
+    datetime_utc = lubridate::ymd_hm(datetime_str, tz = "UTC"),
+
+    # Convert UTC filename timestamp to burn-local time for display/filtering.
+    datetime_local = lubridate::with_tz(datetime_utc, tzone = burn_tz)
   ) %>%
-    mutate(
-      datetime_str = stringr::str_extract(file, "[0-9]{12}"),
-      datetime_local = lubridate::ymd_hm(datetime_str, tz = burn_tz)
-    ) %>%
-    filter(!is.na(datetime_local)) %>%
-    arrange(datetime_local)
+  filter(!is.na(datetime_utc), !is.na(datetime_local)) %>%
+  arrange(datetime_utc)
 
   flaming_start_local <- lubridate::ymd_hms(
     paste0(
