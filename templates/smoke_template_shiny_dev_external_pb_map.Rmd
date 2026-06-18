@@ -1278,7 +1278,11 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
           div.innerHTML = `
             <div class='hourly-slider-title'>Hourly PM<sub>2.5</sub></div>
             <div class='hourly-slider-label' id='hourly-label-${el.id}'>${data.labels[0]}</div>
-            <input id='hourly-slider-${el.id}' type='range' min='0' max='${data.urls.length - 1}' value='0' step='1'>
+            <div class='hourly-slider-row'>
+              <button type='button' class='hourly-step-button' id='hourly-prev-${el.id}' aria-label='Previous time step'>&#9664;</button>
+              <input id='hourly-slider-${el.id}' type='range' min='0' max='${data.urls.length - 1}' value='0' step='1'>
+              <button type='button' class='hourly-step-button' id='hourly-next-${el.id}' aria-label='Next time step'>&#9654;</button>
+            </div>
           `;
 
           L.DomEvent.disableClickPropagation(div);
@@ -1291,18 +1295,45 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
 
         var slider = document.getElementById('hourly-slider-' + el.id);
         var label = document.getElementById('hourly-label-' + el.id);
-
-        slider.addEventListener('input', function(e) {
-          var newIndex = parseInt(e.target.value);
-
+        var prevButton = document.getElementById('hourly-prev-' + el.id);
+        var nextButton = document.getElementById('hourly-next-' + el.id);
+        
+        function setStep(index) {
+          var maxIndex = data.urls.length - 1;
+          var newIndex = Math.max(0, Math.min(maxIndex, index));
+        
           if (map.hasLayer(overlays[currentIndex])) {
             map.removeLayer(overlays[currentIndex]);
           }
-
+        
           overlays[newIndex].addTo(map);
           currentIndex = newIndex;
+          slider.value = newIndex;
           label.innerHTML = data.labels[newIndex];
+        
+          if (prevButton) prevButton.disabled = newIndex === 0;
+          if (nextButton) nextButton.disabled = newIndex === maxIndex;
+        }
+        
+        slider.addEventListener('input', function(e) {
+          setStep(parseInt(e.target.value));
         });
+        
+        slider.addEventListener('change', function(e) {
+          setStep(parseInt(e.target.value));
+        });
+        
+        prevButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          setStep(parseInt(slider.value) - 1);
+        });
+        
+        nextButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          setStep(parseInt(slider.value) + 1);
+        });
+        
+        setStep(0);
       }
       ",
       data = list(
