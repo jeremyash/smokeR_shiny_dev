@@ -1,3 +1,45 @@
+get_pb_zip_burn_date <- function(pb_zip_path, burn_lat = NA, burn_lon = NA) {
+  pb_hourly_dir <- tempfile("pb_hourly_date_")
+  dir.create(pb_hourly_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  unzip(pb_zip_path, exdir = pb_hourly_dir)
+  
+  pb_txt_files <- list.files(
+    pb_hourly_dir,
+    pattern = "^[0-9]{2}[A-Za-z]{3}[0-9]{4}_[0-9]{4}\\.txt$",
+    full.names = TRUE,
+    recursive = TRUE
+  )
+  
+  if (length(pb_txt_files) == 0) {
+    return(as.Date(NA))
+  }
+  
+  file_dates_utc <- as.POSIXct(
+    stringr::str_to_title(
+      stringr::str_remove(basename(pb_txt_files), "\\.txt$")
+    ),
+    format = "%d%b%Y_%H%M",
+    tz = "UTC"
+  )
+  
+  burn_tz <- tryCatch(
+    lutz::tz_lookup_coords(
+      lat = burn_lat,
+      lon = burn_lon,
+      method = "fast"
+    ),
+    error = function(e) "UTC"
+  )
+  
+  if (is.na(burn_tz) || !nzchar(burn_tz)) {
+    burn_tz <- "UTC"
+  }
+  
+  min(as.Date(lubridate::with_tz(file_dates_utc, tzone = burn_tz)), na.rm = TRUE)
+}
+
+
 create_pb_piedmont_map <- function(
     burn_name,
     forest,
@@ -37,6 +79,12 @@ create_pb_piedmont_map <- function(
   )
   
   file.copy(pb_zip_datapath, pb_zip_copy, overwrite = TRUE)
+  
+  pb_burn_date <- get_pb_zip_burn_date(
+    pb_zip_path = pb_zip_copy,
+    burn_lat = burn_lat,
+    burn_lon = burn_lon
+  )
   
   pb_rendered_file <- file.path(tempdir(), pb_map_filename)
   
@@ -84,7 +132,7 @@ create_pb_piedmont_map <- function(
         region = "R08",
         forest = forest,
         burn_name = burn_name,
-        burn_date = as.Date(issued_at),
+        burn_date = pb_burn_date,
         issued_at = issued_at,
         branch = branch
       )
