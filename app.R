@@ -541,6 +541,7 @@ server <- function(input, output, session) {
         if (pb_zip_available) {
           incProgress(0.08, detail = "Rendering and uploading PB Piedmont map")
           
+          
           pb_map_url <- tryCatch({
             pb_result <- create_pb_piedmont_map(
               burn_name = input$BURN_NAME,
@@ -558,6 +559,7 @@ server <- function(input, output, session) {
             message("PB Piedmont map render/upload failed: ", conditionMessage(e))
             NULL
           })
+          
         }
         
         params_ls$PB_MAP_URL <- pb_map_url
@@ -579,6 +581,7 @@ server <- function(input, output, session) {
           params = params_ls,
           envir = new.env(parent = globalenv())
         )
+        
         
         incProgress(0.10, detail = "Uploading report to GitHub Pages")
         
@@ -658,6 +661,8 @@ server <- function(input, output, session) {
         })
         
         incProgress(0.10, detail = "Finalizing report download")
+        
+        
         
         file.copy(rendered_file, file, overwrite = TRUE)
         
