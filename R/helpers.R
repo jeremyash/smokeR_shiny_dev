@@ -111,17 +111,11 @@ short_forest_name <- function(x) {
 get_github_pat <- function() {
   token <- Sys.getenv("GITHUB_PAT")
   
-  if (!identical(token, "")) {
-    return(token)
+  if (!nzchar(token)) {
+    stop("GITHUB_PAT is not set.")
   }
   
-  token_file <- ".secrets/github_pat.txt"
-  
-  if (file.exists(token_file)) {
-    return(trimws(readLines(token_file, warn = FALSE)[1]))
-  }
-  
-  stop("GitHub token not found.")
+  token
 }
 
 get_log_sheet_url <- function() {
