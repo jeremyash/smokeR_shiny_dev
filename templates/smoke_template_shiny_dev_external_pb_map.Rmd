@@ -603,7 +603,7 @@ temp_mon_df$icons <- if (!(is.null(temp_mon_df))) {
 # generate base leaflet map
 air_mon_leaflet <-
   leaflet() %>%
-  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addTiles() %>%
 
   addMarkers(
     data = burn_loc, lng = ~lon, lat = ~lat,
@@ -979,8 +979,7 @@ pop_pal_fun <- colorFactor(palette = "magma",
 
 # generate leaflet map for average smoke
 avg_leaflet <- leaflet() %>% 
-  addProviderTiles(providers$CartoDB.Voyager,
-                   group = "Street") %>% 
+  addTiles(group = "Street") %>% 
 
   addProviderTiles("Esri.WorldImagery",
                     group = "Terrain") %>% 
@@ -1132,7 +1131,7 @@ avg_leaflet <- avg_leaflet %>%
 # generate leaflet map for visual range
 vis_leaflet <- leaflet() %>% 
   
-addProviderTiles(providers$CartoDB.Voyager) %>% 
+addTiles() %>% 
   
   addLegend(
     position = "topright",
@@ -1188,7 +1187,7 @@ vis_leaflet <- vis_leaflet %>%
 if (params$HOURLY_MAP_SELECT == "Yes") {
 
   hourly_leaflet <- leaflet() %>%
-    addProviderTiles(providers$CartoDB.Voyager) %>%
+    addTiles() %>%
     addMapPane("hourly_smoke_map", zIndex = 460) %>%
     addMapPane("hourly_marker_map", zIndex = 700) %>%
     addLegend(
