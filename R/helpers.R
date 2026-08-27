@@ -109,11 +109,6 @@ short_forest_name <- function(x) {
 }
 
 get_github_pat <- function() {
-  token <- Sys.getenv("GITHUB_PAT")
-  
-  if (nzchar(token)) {
-    return(token)
-  }
   
   token_file <- ".secrets/github_pat.txt"
   
@@ -123,6 +118,12 @@ get_github_pat <- function() {
     if (nzchar(token)) {
       return(token)
     }
+  }
+  
+  token <- Sys.getenv("GITHUB_PAT")
+  
+  if (nzchar(token)) {
+    return(token)
   }
   
   stop("GitHub token not found.")
