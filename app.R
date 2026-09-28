@@ -753,7 +753,7 @@ server <- function(input, output, session) {
                                "/output/smoke_dispersion.kmz", sep = "")
       
       # download copy of google earth file into outlooks
-      curl_download(smoke_disp_link, destfile = file)
+      curl::curl_download(smoke_disp_link, destfile = file)
       
       
     }
