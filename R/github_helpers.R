@@ -1,3 +1,4 @@
+
 upload_report_to_github_pages <- function(
     local_file,
     owner,
@@ -41,29 +42,49 @@ upload_report_to_github_pages <- function(
     .token = token
   )
   
-  pages_url_dir <- pages_dir %>%
-    stringr::str_replace("^docs/?", "") %>%
+  pages_url_dir <- pages_dir |>
+    stringr::str_replace("^docs/?", "") |>
     stringr::str_replace_all("^/|/$", "")
   
   if (nzchar(pages_url_dir)) {
-    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
+    paste0(
+      "https://reports.rxsmoke.org/",
+      pages_url_dir, "/",
+      report_filename
+    )
   } else {
-    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
+    paste0(
+      "https://reports.rxsmoke.org/",
+      report_filename
+    )
   }
 }
 
 
-make_github_pages_url <- function(owner, repo, pages_dir, report_filename) {
-  pages_url_dir <- pages_dir %>%
-    stringr::str_replace("^docs/?", "") %>%
+make_github_pages_url <- function(
+    owner,
+    repo,
+    pages_dir,
+    report_filename
+) {
+  pages_url_dir <- pages_dir |>
+    stringr::str_replace("^docs/?", "") |>
     stringr::str_replace_all("^/|/$", "")
   
   if (nzchar(pages_url_dir)) {
-    paste0("https://", owner, ".github.io/", repo, "/", pages_url_dir, "/", report_filename)
+    paste0(
+      "https://reports.rxsmoke.org/",
+      pages_url_dir, "/",
+      report_filename
+    )
   } else {
-    paste0("https://", owner, ".github.io/", repo, "/", report_filename)
+    paste0(
+      "https://reports.rxsmoke.org/",
+      report_filename
+    )
   }
 }
+
 
 log_standalone_pb_piedmont_map <- function(
     region,
