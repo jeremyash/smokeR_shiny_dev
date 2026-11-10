@@ -10,3 +10,6 @@ renv/*
 !renv/settings.json
 
 rsconnect
+
+.secrets/github_pat.txt
+r2_metadata_backup_*/

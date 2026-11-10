@@ -1,6 +1,9 @@
+# 1. Published report link UI ----
+
+## Smoke Report link ----
 build_report_link_ui <- function(url) {
   
-  if (is.null(url)) {
+  if (is.null(url) || !nzchar(url)) {
     return(NULL)
   }
   
@@ -9,12 +12,7 @@ build_report_link_ui <- function(url) {
     
     tags$div(
       class = "success-link-title",
-      "Report available online"
-    ),
-    
-    tags$div(
-      class = "success-link-note",
-      "Note: the link may take 20-60 seconds to become available."
+      "Smoke Report published successfully"
     ),
     
     tags$div(
@@ -23,25 +21,34 @@ build_report_link_ui <- function(url) {
       tags$a(
         href = url,
         target = "_blank",
-        url
+        rel = "noopener noreferrer",
+        class = "btn btn-primary",
+        "View Report"
       ),
       
       tags$button(
         type = "button",
         class = "btn btn-success",
         onclick = sprintf(
-          "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
-          url
+          paste0(
+            "navigator.clipboard.writeText(%s).then(() => {",
+            "this.innerText='Copied!';",
+            "setTimeout(() => this.innerText='Copy Report Link', 1500);",
+            "});"
+          ),
+          jsonlite::toJSON(url, auto_unbox = TRUE)
         ),
-        "Copy URL"
+        "Copy Report Link"
       )
     )
   )
 }
 
+
+## PB Piedmont map link ----
 build_pb_link_ui <- function(url) {
   
-  if (is.null(url)) {
+  if (is.null(url) || !nzchar(url)) {
     return(NULL)
   }
   
@@ -50,12 +57,7 @@ build_pb_link_ui <- function(url) {
     
     tags$div(
       class = "success-link-title",
-      "PB Piedmont map available online"
-    ),
-    
-    tags$div(
-      class = "success-link-note",
-      "Note: the link may take 20-60 seconds to become available."
+      "PB Piedmont map published successfully"
     ),
     
     tags$div(
@@ -64,17 +66,24 @@ build_pb_link_ui <- function(url) {
       tags$a(
         href = url,
         target = "_blank",
-        url
+        rel = "noopener noreferrer",
+        class = "btn btn-primary",
+        "View PB Piedmont Map"
       ),
       
       tags$button(
         type = "button",
         class = "btn btn-success",
         onclick = sprintf(
-          "navigator.clipboard.writeText('%s'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);",
-          url
+          paste0(
+            "navigator.clipboard.writeText(%s).then(() => {",
+            "this.innerText='Copied!';",
+            "setTimeout(() => this.innerText='Copy Map Link', 1500);",
+            "});"
+          ),
+          jsonlite::toJSON(url, auto_unbox = TRUE)
         ),
-        "Copy URL"
+        "Copy Map Link"
       )
     )
   )

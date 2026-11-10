@@ -34,6 +34,7 @@ source("R/pb_helpers.R")
 
 LOG_SHEET_URL <- get_log_sheet_url()
 
+
 nfs_raw <- readRDS(
   here::here("data", "usfs_unit_list.RDS")
 )
@@ -83,7 +84,7 @@ ui <- fluidPage(
     tags$link(
       rel = "stylesheet",
       type = "text/css",
-      href = "app.css?v=2"
+      href = "app.css?v=3"
     ),
     
     tags$link(
@@ -168,10 +169,24 @@ ui <- fluidPage(
             textInput("EMAIL", "Your email (optional)"),
             textInput("PHONE", "Your phone number (optional)"),
             
-            tags$div(class = "app-section-title", "Downloads"),
+            # UI: Report generation and downloads ----
+            tags$div(class = "app-section-title", "Generate report"),
             uiOutput("report_required_msg"),
-            downloadButton("report", "Download Smoke Report"),
-            downloadButton("kmz", "Download Google Earth File")
+            
+            tags$div(
+              class = "report-action-buttons",
+              
+              actionButton(
+                "generate_report",
+                "Generate Smoke Report",
+                class = "btn-primary"
+              ),
+              
+              downloadButton(
+                "kmz",
+                "Download Google Earth File"
+              )
+            )
           ),
           
           # UI: PB Piedmont Map tab ---------------------------------
@@ -246,10 +261,10 @@ server <- function(input, output, session) {
   
   observe({
     if (is_report_ready(input)) {
-      shinyjs::enable("report")
+      shinyjs::enable("generate_report")
       shinyjs::enable("kmz")
     } else {
-      shinyjs::disable("report")
+      shinyjs::disable("generate_report")
       shinyjs::disable("kmz")
     }
   })
@@ -466,15 +481,12 @@ server <- function(input, output, session) {
     })
   })
   
-  # SERVER: Smoke report workflow ---------------------------
-  output$report <- downloadHandler(
-    filename = function() {
-      report_metadata()$report_filename
-    },
+  # SERVER: Smoke report workflow ----
+  observeEvent(input$generate_report, {
     
-    content = function(file) {
-      
-      withProgress(message = "Generating smoke report...", value = 0, {
+    req(is_report_ready(input))
+    
+    withProgress(message = "Generating smoke report...", value = 0, {
         
         incProgress(0.10, detail = "Preparing report parameters")
         
@@ -517,11 +529,12 @@ server <- function(input, output, session) {
           LOG_ROW_FILE = log_row_file
         )
         
-        report_url <- make_github_pages_url(
-          owner = APP_OWNER,
-          repo = APP_REPO,
-          pages_dir = REPORT_PAGES_DIR,
-          report_filename = report_filename
+        # 1. Prepare Cloudflare R2 report URL ----
+        
+        report_url <- paste0(
+          sub("/+$", "", Sys.getenv("R2_PROD_PUBLIC_URL")),
+          "/sr/",
+          report_filename
         )
         
         params_ls$REPORT_URL <- report_url
@@ -582,90 +595,142 @@ server <- function(input, output, session) {
           envir = new.env(parent = globalenv())
         )
         
+        # 1. Publish smoke report to Cloudflare R2 ----
         
-        incProgress(0.10, detail = "Uploading report to GitHub Pages")
+        incProgress(0.10, detail = "Publishing smoke report to Cloudflare R2")
         
-        # SAFE GitHub upload
-        github_success <- tryCatch({
+        report_link(NULL)
+        
+        r2_success <- tryCatch({
           
-          report_url <- upload_report_to_github_pages(
+          # Upload rendered HTML to R2
+          r2_report_url <- upload_report_to_r2(
             local_file = rendered_file,
-            owner = APP_OWNER,
-            repo = APP_REPO,
-            branch = APP_BRANCH,
-            pages_dir = REPORT_PAGES_DIR,
             report_filename = report_filename,
-            commit_message = paste(
-              input$BURN_NAME,
-              "|",
-              format(issued_at, "%Y-%m-%d"),
-              "|",
-              input$FOREST
-            )
+            folder = "sr"
           )
           
+          message("R2 report uploaded: ", r2_report_url)
+          
+          # Verify that the report is publicly accessible
+          response <- httr::GET(
+            r2_report_url,
+            httr::timeout(30)
+          )
+          
+          status <- httr::status_code(response)
+          
+          if (status != 200L) {
+            stop("R2 public URL returned HTTP ", status)
+          }
+          
+          message("R2 public URL verified (HTTP 200): ", r2_report_url)
+          
+          # Display the link only after verification
+          report_url <- r2_report_url
           report_link(report_url)
           
-          update_index_page(
-            owner = APP_OWNER,
-            repo = APP_REPO,
-            report_filename = report_filename,
-            report_type = "report",
-            region = sprintf("R%02d", as.integer(input$REGION)),
-            forest = input$FOREST,
-            burn_name = input$BURN_NAME,
-            burn_date = burn_meta$burn_date,
-            issued_at = issued_at,
-            branch = APP_BRANCH
-          )
           
-          message("Report uploaded and index updated: ", report_url)
+          # 2. Publish report metadata to R2 ----
+          # Purpose: Make newly published reports searchable in the R2 archive.
           
-          tryCatch(
-            {
-              if (!file.exists(log_row_file)) {
-                stop("Smoke report log row file was not created: ", log_row_file)
-              }
-              
-              log_row <- readRDS(log_row_file)
-              
-              safe_append_smoke_app_log(
-                sheet_url = LOG_SHEET_URL,
-                report_type = log_row$report_type,
-                region = log_row$region,
-                forest = log_row$forest,
-                burn_name = log_row$burn_name,
-                burn_date = log_row$burn_date,
-                date_issued = log_row$date_issued,
-                lat = log_row$lat,
-                lon = log_row$lon,
-                acreage = log_row$acreage,
-                run_id = log_row$run_id,
-                superfog_potential = log_row$superfog_potential,
-                report_url = report_url,
-                pb_map_url = log_row$pb_map_url,
-                context = "Smoke report log"
-              )
-            },
-            error = function(e) {
-              message("Smoke report log failed: ", conditionMessage(e))
+          tryCatch({
+            
+            issued_label <- paste0(
+              format(issued_at, "%Y-%m-%d %H:%M"),
+              " ",
+              format(issued_at, "%Z")
+            )
+            
+            report_metadata_json <- list(
+              product = "Smoke Report",
+              region = sprintf("R%02d", as.integer(input$REGION)),
+              forest = input$FOREST,
+              burnName = input$BURN_NAME,
+              burnDate = format(as.Date(burn_meta$burn_date), "%Y-%m-%d"),
+              issued = format(issued_at, "%Y-%m-%dT%H:%M:%S"),
+              issuedLabel = issued_label,
+              issuedUtc = format(
+                lubridate::with_tz(issued_at, "UTC"),
+                "%Y-%m-%dT%H:%M:%SZ",
+                tz = "UTC"
+              ),
+              url = paste0("sr/", report_filename)
+            )
+            
+            metadata_key <- upload_report_metadata_to_r2(
+              metadata = report_metadata_json,
+              report_filename = report_filename,
+              folder = "sr"
+            )
+            
+            message("Report archive metadata published: ", metadata_key)
+            
+          }, error = function(e) {
+            
+            message(
+              "Report published successfully, but archive metadata failed: ",
+              conditionMessage(e)
+            )
+            
+          })
+          
+          # 2. Log published report to Google Sheets ----
+          
+          tryCatch({
+            
+            if (!file.exists(log_row_file)) {
+              stop("Smoke report log row file was not created: ", log_row_file)
             }
-          )
+            
+            log_row <- readRDS(log_row_file)
+            
+            safe_append_smoke_app_log(
+              sheet_url = LOG_SHEET_URL,
+              report_type = log_row$report_type,
+              region = log_row$region,
+              forest = log_row$forest,
+              burn_name = log_row$burn_name,
+              burn_date = log_row$burn_date,
+              date_issued = log_row$date_issued,
+              lat = log_row$lat,
+              lon = log_row$lon,
+              acreage = log_row$acreage,
+              run_id = log_row$run_id,
+              superfog_potential = log_row$superfog_potential,
+              report_url = report_url,
+              pb_map_url = log_row$pb_map_url,
+              context = "Smoke report log"
+            )
+            
+          }, error = function(e) {
+            
+            message("Smoke report log failed: ", conditionMessage(e))
+            
+          })
           
           TRUE
           
         }, error = function(e) {
-          message("GitHub upload or index update failed: ", conditionMessage(e))
+          
+          message("R2 report publishing failed: ", conditionMessage(e))
           report_link(NULL)
+          
           FALSE
+          
         })
         
-        incProgress(0.10, detail = "Finalizing report download")
+        # 3. Complete report generation ----
         
+        incProgress(0.10, detail = "Report generation complete")
         
-        
-        file.copy(rendered_file, file, overwrite = TRUE)
-        
+        if (!r2_success) {
+          showNotification(
+            "The report was generated, but publishing to R2 failed.",
+            type = "error",
+            duration = NULL
+          )
+        }
       })
     }
   )

@@ -48,11 +48,7 @@ create_pb_piedmont_map <- function(
     pb_zip_name = "hourly_output.zip",
     burn_lat = NA,
     burn_lon = NA,
-    issued_at = NULL,
-    owner = "jeremyash",
-    repo = "smoke_reports",
-    branch = "main",
-    pages_dir = "docs/pb"
+    issued_at = NULL
 ) {
   
   if (is.null(issued_at)) {
@@ -106,43 +102,80 @@ create_pb_piedmont_map <- function(
     envir = new.env(parent = globalenv())
   )
   
-  pb_map_url <- upload_report_to_github_pages(
+  # 1. Publish PB Piedmont map to Cloudflare R2 ----
+  
+  pb_map_url <- upload_report_to_r2(
     local_file = pb_rendered_file,
-    owner = owner,
-    repo = repo,
-    branch = branch,
-    pages_dir = pages_dir,
     report_filename = pb_map_filename,
-    commit_message = paste(
-      burn_name,
-      "| PB Piedmont |",
-      format(issued_at, "%Y-%m-%d"),
-      "|",
-      forest
-    )
+    folder = "pb"
   )
   
-  tryCatch(
-    {
-      update_index_page(
-        owner = owner,
-        repo = repo,
-        report_filename = pb_map_filename,
-        report_type = "pb",
-        region = "R08",
-        forest = forest,
-        burn_name = burn_name,
-        burn_date = pb_burn_date,
-        issued_at = issued_at,
-        branch = branch
-      )
-      
-      message("PB Piedmont index updated successfully")
-    },
-    error = function(e) {
-      message("PB Piedmont index update failed: ", conditionMessage(e))
-    }
+  message("PB Piedmont map uploaded to R2: ", pb_map_url)
+  
+  # 1.1 Verify public PB Piedmont map URL ----
+  
+  response <- httr::GET(
+    pb_map_url,
+    httr::timeout(30)
   )
+  
+  status <- httr::status_code(response)
+  
+  if (status != 200L) {
+    stop("PB Piedmont public URL returned HTTP ", status)
+  }
+  
+  message(
+    "PB Piedmont public URL verified (HTTP 200): ",
+    pb_map_url
+  )
+  
+  # 2. Publish PB Piedmont archive metadata ----
+  
+  tryCatch({
+    
+    issued_label <- paste0(
+      format(issued_at, "%Y-%m-%d %H:%M"),
+      " ",
+      format(issued_at, "%Z")
+    )
+    
+    pb_metadata <- list(
+      product = "PB Piedmont",
+      region = "R08",
+      forest = forest,
+      burnName = burn_name,
+      burnDate = if (is.na(pb_burn_date)) {
+        ""
+      } else {
+        format(pb_burn_date, "%Y-%m-%d")
+      },
+      issued = format(issued_at, "%Y-%m-%dT%H:%M:%S"),
+      issuedLabel = issued_label,
+      issuedUtc = format(
+        lubridate::with_tz(issued_at, "UTC"),
+        "%Y-%m-%dT%H:%M:%SZ",
+        tz = "UTC"
+      ),
+      url = paste0("pb/", pb_map_filename)
+    )
+    
+    metadata_key <- upload_report_metadata_to_r2(
+      metadata = pb_metadata,
+      report_filename = pb_map_filename,
+      folder = "pb"
+    )
+    
+    message("PB Piedmont archive metadata published: ", metadata_key)
+    
+  }, error = function(e) {
+    
+    message(
+      "PB Piedmont map published, but archive metadata failed: ",
+      conditionMessage(e)
+    )
+    
+  })
   
   list(
     url = pb_map_url,
