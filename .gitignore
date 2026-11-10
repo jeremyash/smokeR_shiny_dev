@@ -16,3 +16,5 @@ smokeR_dev/rsconnect
 .secrets/
 rsconnect/
 .Rproj.user/
+# Local R2 metadata backups
+r2_metadata_backup_*/
