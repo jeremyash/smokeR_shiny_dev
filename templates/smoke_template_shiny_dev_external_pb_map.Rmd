@@ -27,6 +27,8 @@ params:
 ---
 
 ```{r setup, include=FALSE}
+# 1. Setup and Report Assets ----
+
 knitr::opts_chunk$set(
   echo = FALSE,
   message = FALSE,
@@ -104,9 +106,9 @@ pb_preview_uri <- make_data_uri(
 ```
 
 ```{r burn_info, include = FALSE}
-##***************************************
-## FIND MOST RECENT MODEL RUN AND CORRECT SERVER LINK 
-##***************************************
+# 2. Model Run, Burn Information, and Air Quality Data ----
+
+## 2.1 Select Most Recent BlueSky Model Run ----
 
 # general dispersion results link
 bsky_link <- paste("https://tools.airfire.org/playground/v3.5/dispersionresults.php?scenario_id=",
@@ -169,7 +171,7 @@ recent_server <- bind_rows(date_info_1, date_info_2) %>%
 results_output_link <- serv_links_ls[[recent_server]]
 
 
-## CREATE DATAFRAME OF BASIC FIRE INFO  ----------------------------------------------
+## 2.2 Prepare Burn Information ----
 
 # basic burn information
 basic_burn_info <- read.csv(paste(results_output_link, "/output/data/fire_locations.csv", sep = "")) %>% 
@@ -243,7 +245,7 @@ burn_kable <- tibble(vars = c("Date", "Coordinates", "Acreage", "Flaming Start",
   column_spec(1, bold = T)
 
 
-## GENERATE DATA FOR RECENT AIR QUALITY ----------------------------------------------
+## 2.3 Retrieve Recent Air Quality Data ----
 # start and end dates for pulling air quality monitor data
 startdate <- burn_info$date - lubridate::ddays(3)
 enddate <- burn_info$date - lubridate::ddays(1)
@@ -371,7 +373,7 @@ tryCatch(
   }
 )
 
-# * airnow_tomorrow ----
+## 2.4 Retrieve Tomorrow AQI Forecast ----
 
 
 # read in kml of airnow aqi forecast for tomorrow
@@ -484,6 +486,8 @@ superfog_sen <- if (burn_info$region == "08") {
 ```
 
 ```{r title_banner, results='asis', echo=FALSE}
+# 3. Report Title Banner ----
+
 
 browser_title <- paste(params$BURN_NAME, "- Smoke Report")
 
@@ -543,6 +547,8 @@ Additional smoke modeling output can be found at the <a href="`r bsky_link`" tar
 ```
 
 ```{r fire_info_tbl, echo=FALSE, warning=FALSE}
+# 4. Burn Information Table ----
+
 burn_kable
 ```
 
@@ -560,7 +566,9 @@ The AQI forecasts for today and tomorrow can be turned on by selecting the layer
 
 
 ```{r burn_map_aqi, out.width="100%", include=TRUE, results='asis'}
-## CREATE MAP OF BURN AND NEARBY AQ MONITORS ----------------------------------------------
+# 5. Recent Air Quality Map and Table ----
+
+## 5.1 Prepare AQI Map Markers and Legend ----
 
 # read in burn icon for mapping
 burn_icon <- tibble(
@@ -735,13 +743,80 @@ aqi_table <- tibble(
   row_spec(1:6, extra_css = "height: 28px;") %>%
   as.character()
 
-# ---- MAP (remove bottom spacing) ----
+## 5.2 Mobile Collapsible AQI and Map Symbol Legends ----
+# Keep both legends visible on desktop and independently collapsible on mobile.
+# The AQI color legend uses Leaflet's .info.legend control; the symbol key is
+# a separate addControl() element containing the marker icon images.
+air_mon_leaflet <- air_mon_leaflet %>%
+  htmlwidgets::onRender("
+    function(el, x) {
+      var corner = el.querySelector('.leaflet-bottom.leaflet-left');
+      if (!corner) return;
+
+      var controls = Array.prototype.slice.call(corner.children);
+      var aqiLegend = controls.find(function(control) {
+        return control.classList.contains('legend') &&
+               control.classList.contains('info');
+      });
+      var symbolLegend = controls.find(function(control) {
+        return control !== aqiLegend &&
+               control.classList.contains('leaflet-control') &&
+               control.querySelector('img');
+      });
+
+      function makeCollapsible(legend, label) {
+        if (!legend || legend.querySelector('.mobile-legend-toggle')) return;
+
+        var content = document.createElement('div');
+        content.className = 'mobile-legend-content';
+
+        while (legend.firstChild) {
+          content.appendChild(legend.firstChild);
+        }
+
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'mobile-legend-toggle';
+        button.textContent = label;
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-label', 'Toggle ' + label);
+
+        legend.appendChild(button);
+        legend.appendChild(content);
+
+        function updateLayout() {
+          var mobile = window.innerWidth <= 767;
+          var expanded = button.getAttribute('aria-expanded') === 'true';
+          button.style.display = mobile ? 'block' : 'none';
+          content.style.display = !mobile || expanded ? 'block' : 'none';
+        }
+
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var expanded = button.getAttribute('aria-expanded') === 'true';
+          button.setAttribute('aria-expanded', String(!expanded));
+          updateLayout();
+        });
+
+        L.DomEvent.disableClickPropagation(legend);
+        L.DomEvent.disableScrollPropagation(legend);
+        window.addEventListener('resize', updateLayout);
+        updateLayout();
+      }
+
+      makeCollapsible(aqiLegend, 'AQI Legend');
+      makeCollapsible(symbolLegend, 'Map Symbols');
+    }
+  ")
+
+## 5.3 Display AQI Map ----
 htmltools::div(
   style = "margin-bottom:0;",
   air_mon_leaflet
 )
 
-# ---- BOXED TABLE (tight to map) ----
+## 5.4 Display AQI Information Table ----
 cat(
   paste0(
     "<div style='margin-top:8px; width:100%; max-width:100%; box-sizing:border-box; border:2px solid #cccccc; border-radius:6px; padding:12px 14px; background:#ffffff;'>",
@@ -761,8 +836,10 @@ Below are the smoke modeling outputs for the day of the planned burn. The maps s
 
 
 ```{r leaflet_map_data_mgt, include=FALSE}
+# 6. Smoke Dispersion Data and Maps ----
 
-## READ IN POP DATA ----------------------------------------------
+
+## 6.1 Load Population Data ----
 
 # census data
 pop <- readRDS(
@@ -770,7 +847,7 @@ pop <- readRDS(
 )
 
 
-## DOWNLOAD PNG MAP IMAGES AND GRID INFO ----------------------------------------------
+## 6.2 Download Model Images and Grid Information ----
 
 # create outlook directory
 dir.create("temp", showWarnings = FALSE)
@@ -813,7 +890,7 @@ curl::curl_download(
 )
 
 
-## READ PNG FILES ---------------------------------------------------------
+## 6.3 Prepare Image Overlays and Bounds ----
 
 grid_info <- jsonlite::fromJSON(paste0(outlook_path, "/grid_info.json"))
 
@@ -836,7 +913,7 @@ vis_png_uri <- base64enc::dataURI(
   mime = "image/png"
 )
 
-## HOURLY PM2.5 PNGS ---------------------------------------------------------------
+## 6.4 Prepare Hourly PM2.5 Images ----
 
 if (params$HOURLY_MAP_SELECT == "Yes") {
 
@@ -896,7 +973,7 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
   hourly_png_data <- hourly_png_urls
 }
 
-## PREP POPULATION DATA ----------------------------------------------
+## 6.5 Prepare Population Raster ----
 
 # create buffer around ignition to clip SVI/pop rasters
 burn_buf <- st_buffer(burn_loc_sf, dist = 500000)
@@ -908,9 +985,9 @@ pop_buf <- mask(x=pop_cr, mask=pop_fr)
 
 
 
-## LEAFLET PLOTTING OF DAILY AVERAGE SMOKE AND VISUAL RANGE ----------------------------------------------
+## 6.6 Configure Smoke and Visual Range Colors ----
 
-# Colors for PM ----------------------------------------------
+# PM2.5 colors
 
 # colors for pm bins
 pm25_cols <- c(
@@ -928,7 +1005,7 @@ pm25_cols <- c(
 pm25_bins <- c(1, 9, 35, 55, 150, 250, 350, 500, Inf)
 
 
-# Colors for Visual Range ----------------------------------------------
+# Visual range colors
 
 # visibility colors
 vis_cols <- c(
@@ -967,7 +1044,7 @@ vis_labels <- c(
 )
 
 
-# Colors for Population ----------------------------------------------
+## 6.7 Configure Population Colors ----
 
 # create color palette function for pop
 pop_pal_fun <- colorFactor(palette = "magma",
@@ -975,7 +1052,7 @@ pop_pal_fun <- colorFactor(palette = "magma",
                     reverse = TRUE,
                     na.color = "transparent")
 
-# Daily Average Leaflet ----------------------------------------------
+## 6.8 Build Daily Average Smoke Map ----
 
 # generate leaflet map for average smoke
 avg_leaflet <- leaflet() %>% 
@@ -1057,7 +1134,7 @@ avg_leaflet <- leaflet() %>%
     overlayGroups = c("Smoke", "Distance from Fire", "Population"),
     baseGroups = c("Street", "Terrain"),
     options = layersControlOptions(zIndex = 490,
-                                   collapsed = FALSE)) %>%
+                                   collapsed = TRUE)) %>%
   hideGroup("Population") %>%
   hideGroup("Distance from Fire") 
 
@@ -1126,8 +1203,58 @@ avg_leaflet <- avg_leaflet %>%
   )
 
 
+## 6.9 Mobile Collapsible Daily PM2.5 Legend ----
+# Preserve the full legend on desktop; collapse it on narrow screens.
+# The Leaflet legend content lives directly inside the control element.
+avg_leaflet <- avg_leaflet %>%
+  htmlwidgets::onRender("
+    function(el, x) {
+      var legend = el.querySelector('.info.legend.leaflet-control');
+      if (!legend || legend.querySelector('.mobile-legend-toggle')) return;
+
+      var content = document.createElement('div');
+      content.className = 'mobile-legend-content';
+
+      while (legend.firstChild) {
+        content.appendChild(legend.firstChild);
+      }
+
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mobile-legend-toggle';
+      button.textContent = 'Legend';
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-label', 'Toggle PM2.5 legend');
+
+      legend.appendChild(button);
+      legend.appendChild(content);
+
+      function updateLayout() {
+        var mobile = window.innerWidth <= 767;
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+
+        button.style.display = mobile ? 'block' : 'none';
+        content.style.display = !mobile || expanded ? 'block' : 'none';
+      }
+
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        updateLayout();
+      });
+
+      L.DomEvent.disableClickPropagation(legend);
+      L.DomEvent.disableScrollPropagation(legend);
+      window.addEventListener('resize', updateLayout);
+      updateLayout();
+    }
+  ")
 
 
+## 6.10 Build Visual Range Map ----
 # generate leaflet map for visual range
 vis_leaflet <- leaflet() %>% 
   
@@ -1183,7 +1310,58 @@ vis_leaflet <- vis_leaflet %>%
   )
 
 
-## Hourly PM2.5 Leaflet ------------------------------------------------------------
+## 6.11 Mobile Collapsible Visual Range Legend ----
+# Preserve the full legend on desktop; collapse it on narrow screens.
+# The Leaflet legend content lives directly inside the control element.
+vis_leaflet <- vis_leaflet %>%
+  htmlwidgets::onRender("
+    function(el, x) {
+      var legend = el.querySelector('.info.legend.leaflet-control');
+      if (!legend || legend.querySelector('.mobile-legend-toggle')) return;
+
+      var content = document.createElement('div');
+      content.className = 'mobile-legend-content';
+
+      while (legend.firstChild) {
+        content.appendChild(legend.firstChild);
+      }
+
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mobile-legend-toggle';
+      button.textContent = 'Legend';
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-label', 'Toggle visual range legend');
+
+      legend.appendChild(button);
+      legend.appendChild(content);
+
+      function updateLayout() {
+        var mobile = window.innerWidth <= 767;
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+
+        button.style.display = mobile ? 'block' : 'none';
+        content.style.display = !mobile || expanded ? 'block' : 'none';
+      }
+
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        updateLayout();
+      });
+
+      L.DomEvent.disableClickPropagation(legend);
+      L.DomEvent.disableScrollPropagation(legend);
+      window.addEventListener('resize', updateLayout);
+      updateLayout();
+    }
+  ")
+
+
+## 6.12 Build Hourly PM2.5 Map ----
 if (params$HOURLY_MAP_SELECT == "Yes") {
 
   hourly_leaflet <- leaflet() %>%
@@ -1355,6 +1533,59 @@ if (params$HOURLY_MAP_SELECT == "Yes") {
 }
 
 
+## 6.13 Mobile Collapsible Hourly PM2.5 Legend ----
+# Preserve the full legend on desktop; collapse it on narrow screens.
+# The Leaflet legend content lives directly inside the control element.
+if (params$HOURLY_MAP_SELECT == "Yes") {
+  hourly_leaflet <- hourly_leaflet %>%
+  htmlwidgets::onRender("
+    function(el, x) {
+      var legend = el.querySelector('.info.legend.leaflet-control');
+      if (!legend || legend.querySelector('.mobile-legend-toggle')) return;
+
+      var content = document.createElement('div');
+      content.className = 'mobile-legend-content';
+
+      while (legend.firstChild) {
+        content.appendChild(legend.firstChild);
+      }
+
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mobile-legend-toggle';
+      button.textContent = 'Legend';
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-label', 'Toggle hourly PM2.5 legend');
+
+      legend.appendChild(button);
+      legend.appendChild(content);
+
+      function updateLayout() {
+        var mobile = window.innerWidth <= 767;
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+
+        button.style.display = mobile ? 'block' : 'none';
+        content.style.display = !mobile || expanded ? 'block' : 'none';
+      }
+
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        updateLayout();
+      });
+
+      L.DomEvent.disableClickPropagation(legend);
+      L.DomEvent.disableScrollPropagation(legend);
+      window.addEventListener('resize', updateLayout);
+      updateLayout();
+    }
+  ")
+}
+
+
 # remove smoke dispersion files from directory
 unlink(outlook_path,
        recursive = TRUE)
@@ -1365,6 +1596,8 @@ unlink(outlook_path,
 The average daily smoke conditions are helpful for concerns related to public health. Select **Population** to see the number of people in each census tract surrounding the planned burn.
 
 ```{r avg_leaflet_map_show, out.width="100%", include=TRUE}
+# 7. Daily Average Smoke Map Output ----
+
 avg_leaflet
 ```
 
@@ -1374,20 +1607,28 @@ avg_leaflet
 The maximum hourly impact to visual range shows estimated smoke impacts to visibility in the area. This map is useful for identifying potential impacts to visibility on roadways or other sensitive areas.
 
 ```{r vis_leaflet_map_show, out.width="100%", include=TRUE}
+# 8. Visual Range Map Output ----
+
 vis_leaflet
 ```
 
 
 ```{r hourly_leaflet_text, results='asis', echo=FALSE, eval=params$HOURLY_MAP_SELECT == "Yes"}
+# 9. Hourly Smoke Map Description ----
+
 cat("### Hourly Smoke Conditions\n\n")
 cat("Use the slider on the map to view the hourly modeled smoke concentrations from the time of ignition.\n\n")
 ```
 
 ```{r hourly_leaflet_map_show, out.width="100%", echo=FALSE, eval=params$HOURLY_MAP_SELECT == "Yes"}
+# 10. Hourly Smoke Map Output ----
+
 hourly_leaflet
 ```
 
 ```{r superfog_section, results='asis'}
+# 11. Superfog Screening Text ----
+
 if (params$REGION == "08") {
   cat("## Superfog Screening\n\n")
   cat(superfog_sen, "\n\n")
@@ -1395,6 +1636,8 @@ if (params$REGION == "08") {
 ```
 
 ```{r pb_piedmont_card, results='asis', echo=FALSE}
+# 12. PB Piedmont Report Link ----
+
 if (
   params$REGION == "08" &&
   identical(params$SUPERFOG_SCREEN_SELECT, "Yes") &&
@@ -1420,15 +1663,17 @@ The Fire Weather Dashboard link below shows predicted fire weather for the area.
 
 
 ```{r firepoker_link, include=FALSE}
+# 13. Weather and Air Quality Links ----
 
-## Generate Fire Weather Dashboard link
+
+## 13.1 Fire Weather Dashboard URL ----
 fwd_url <- paste0("https://www.weather.gov/dlh/fwd?lat=",
                   round(burn_loc$lat, 3),
                   "&lon=",
                   round(burn_loc$lon, 3),
                   "&clat=38.967&clon=-97.267&zoom=7.000&basemap=stamenterrain&bbox=[-16540299.098,2518065.675,-5115162.882,6915872.719]&layers=USStates|ForecastDot|Domain|SurfaceFronts|Radar|&fwf=F&dispersion=0,13,30,60,250&ndfd=windgust&nohelp=t&vrunits=ktft")
 
-## Generate Fire and Smoke Map Link
+## 13.2 Fire and Smoke Map URL ----
 fasm_url <- paste0("https://fire.airnow.gov/#6.91/",
                    round(burn_loc$lat, 3),
                   "/",
@@ -1542,6 +1787,8 @@ fasm_url <- paste0("https://fire.airnow.gov/#6.91/",
 ```
 
 ```{r weather_link_cards, results='asis'}
+# 14. External Link Cards ----
+
 cat(
   paste0(
     '<div class="link-card-wrap">',
@@ -1563,6 +1810,8 @@ cat(
 
 
 ```{r log_file, include = FALSE, echo = FALSE}
+# 15. Report Logging ----
+
 log_row <- list(
   report_type = "Smoke Report",
   region = params$REGION,

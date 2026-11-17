@@ -366,3 +366,103 @@ h3 {
   border-color: #c9d2da;
   cursor: not-allowed;
 }
+
+/* Mobile: Hourly map navigation ------------------------------ */
+
+@media (max-width: 767px) {
+
+  .hourly-step-button {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+
+}
+
+/* Mobile: Responsive hourly slider -------------------------- */
+
+@media (max-width: 767px) {
+
+  .hourly-slider-control {
+    min-width: 0;
+    width: min(300px, calc(100vw - 40px));
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .hourly-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .hourly-slider-control input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+  }
+
+}
+
+/* Mobile: Separate scale from hourly slider only ------------ */
+
+@media (max-width: 767px) {
+
+  .leaflet-container:has(.hourly-slider-control)
+  .leaflet-control-scale {
+    margin-bottom: 70px !important;
+  }
+
+}
+
+/* Mobile: Report title and long names ----------------------- */
+
+@media (max-width: 767px) {
+
+  .report-title-banner {
+    gap: 12px;
+    padding: 14px;
+    align-items: flex-start;
+  }
+
+  .report-title-banner img {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .report-title-text {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .report-title-main {
+    font-size: 23px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .report-title-sub {
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+}
+
+/* Mobile: Collapsible map legend ---------------------------- */
+
+@media (max-width: 767px) {
+  .mobile-legend-toggle {
+    display: block;
+    background: white;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+}
