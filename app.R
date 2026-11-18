@@ -747,6 +747,7 @@ server <- function(input, output, session) {
   
   
   
+  
   # SERVER: Google Earth KMZ workflow -----------------------
   output$kmz <- downloadHandler(
     filename = function() {
@@ -755,13 +756,11 @@ server <- function(input, output, session) {
     
     content = function(file) {
       
-      # Temporary diagnostics: remove after troubleshooting
-      message("[KMZ DEBUG] Download handler started")
+      run_id <- input$RUN_ID
+      
+      message("KMZ download started for BlueSky run: ", run_id)
       
       tryCatch({
-        
-        run_id <- input$RUN_ID
-        message("[KMZ DEBUG] Run ID: ", run_id)
         
         server_links <- c(
           serv1_link = paste0(
@@ -774,34 +773,20 @@ server <- function(input, output, session) {
           )
         )
         
-        # Check each server and retrieve completion timestamps
+        ## Retrieve valid BlueSky server metadata ----
+        
         server_results <- lapply(names(server_links), function(server_name) {
           
           link <- server_links[[server_name]]
           json_url <- paste0(link, "/output.json")
           
-          message("[KMZ DEBUG] Checking ", server_name)
-          
           tryCatch({
             
-            available <- RCurl::url.exists(json_url)
-            
-            message(
-              "[KMZ DEBUG] ", server_name,
-              " output.json accessible: ", available
-            )
-            
-            if (!available) {
+            if (!RCurl::url.exists(json_url)) {
               return(NULL)
             }
             
             json_data <- rjson::fromJSON(file = json_url)
-            
-            message(
-              "[KMZ DEBUG] ", server_name,
-              " JSON parsed successfully"
-            )
-            
             end_time_raw <- json_data$runtime[["end"]]
             
             if (is.null(end_time_raw) ||
@@ -809,11 +794,6 @@ server <- function(input, output, session) {
                 is.na(end_time_raw)) {
               stop("Missing or invalid runtime.end")
             }
-            
-            message(
-              "[KMZ DEBUG] ", server_name,
-              " runtime.end: ", end_time_raw
-            )
             
             end_time <- lubridate::as_datetime(end_time_raw)
             
@@ -829,7 +809,7 @@ server <- function(input, output, session) {
           }, error = function(e) {
             
             message(
-              "[KMZ DEBUG] ERROR checking ",
+              "KMZ metadata unavailable on ",
               server_name, ": ", conditionMessage(e)
             )
             
@@ -843,22 +823,23 @@ server <- function(input, output, session) {
           stop("No BlueSky server returned valid runtime metadata")
         }
         
+        ## Select most recent BlueSky output ----
+        
         server_df <- dplyr::bind_rows(server_results)
         
         selected_server <- server_df$server[
           which.max(server_df$end_time)
         ]
         
-        message("[KMZ DEBUG] Selected server: ", selected_server)
+        message("KMZ selected BlueSky server: ", selected_server)
+        
+        ## Download Google Earth KMZ ----
         
         kmz_url <- paste0(
           server_links[[selected_server]],
           "/output/smoke_dispersion.kmz"
         )
         
-        message("[KMZ DEBUG] Download URL: ", kmz_url)
-        
-        # Download KMZ into Shiny's temporary output file
         curl::curl_download(
           kmz_url,
           destfile = file
@@ -866,27 +847,22 @@ server <- function(input, output, session) {
         
         file_size <- file.info(file)$size
         
-        message("[KMZ DEBUG] Downloaded bytes: ", file_size)
-        
         if (is.na(file_size) || file_size == 0) {
           stop("Downloaded KMZ is empty or missing")
         }
         
-        message("[KMZ DEBUG] Download handler completed successfully")
+        message("KMZ downloaded successfully: ", file_size, " bytes")
         
       }, error = function(e) {
         
-        message(
-          "[KMZ DEBUG] DOWNLOAD FAILED: ",
-          conditionMessage(e)
-        )
-        
+        message("KMZ download failed: ", conditionMessage(e))
         stop(e)
       })
     },
     
     contentType = "application/vnd.google-earth.kmz"
   )
+  
   
 }
 
