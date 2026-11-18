@@ -746,83 +746,148 @@ server <- function(input, output, session) {
   })
   
   
+  
   # SERVER: Google Earth KMZ workflow -----------------------
   output$kmz <- downloadHandler(
-    # set up file names for downloads
     filename = function() {
       report_metadata()$kmz_filename
     },
+    
     content = function(file) {
-      # general dispersion results link
-      bsky_link <- paste("https://tools.airfire.org/playground/v3.5/dispersionresults.php?scenario_id=",
-                         input$RUN_ID,
-                         sep = "")
       
-      # links for results output from both servers
-      serv1_link <- paste("https://playground-1.airfire.org/bluesky-web-output/",
-                          input$RUN_ID,
-                          "-dispersion",
-                          sep = "")
+      # Temporary diagnostics: remove after troubleshooting
+      message("[KMZ DEBUG] Download handler started")
       
-      serv2_link <- paste("https://playground-2.airfire.org/bluesky-web-output/",
-                          input$RUN_ID,
-                          "-dispersion",
-                          sep = "")
-      
-      serv_links_ls <- list(serv1_link, serv2_link)
-      names(serv_links_ls) <- c("serv1_link", 
-                                "serv2_link")
-      
-      
-      # get info on end time of simulation for each server
-      date_info_1 <- if (url.exists(serv1_link)) {
+      tryCatch({
         
-        # pull end time from output.json
-        end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv1_link, "/output.json", sep = ""))$runtime[["end"]])
+        run_id <- input$RUN_ID
+        message("[KMZ DEBUG] Run ID: ", run_id)
         
-        # create df
-        end_time_df <- tibble(server = "serv1_link",
-                              end_time = end_time_val)
+        server_links <- c(
+          serv1_link = paste0(
+            "https://playground-1.airfire.org/bluesky-web-output/",
+            run_id, "-dispersion"
+          ),
+          serv2_link = paste0(
+            "https://playground-2.airfire.org/bluesky-web-output/",
+            run_id, "-dispersion"
+          )
+        )
         
-      }else{
-        # create df
-        end_time_df <- tibble(server = NA,
-                              end_time = NA)}
-      
-      
-      
-      date_info_2 <- if (url.exists(serv2_link)) {
+        # Check each server and retrieve completion timestamps
+        server_results <- lapply(names(server_links), function(server_name) {
+          
+          link <- server_links[[server_name]]
+          json_url <- paste0(link, "/output.json")
+          
+          message("[KMZ DEBUG] Checking ", server_name)
+          
+          tryCatch({
+            
+            available <- RCurl::url.exists(json_url)
+            
+            message(
+              "[KMZ DEBUG] ", server_name,
+              " output.json accessible: ", available
+            )
+            
+            if (!available) {
+              return(NULL)
+            }
+            
+            json_data <- rjson::fromJSON(file = json_url)
+            
+            message(
+              "[KMZ DEBUG] ", server_name,
+              " JSON parsed successfully"
+            )
+            
+            end_time_raw <- json_data$runtime[["end"]]
+            
+            if (is.null(end_time_raw) ||
+                length(end_time_raw) != 1 ||
+                is.na(end_time_raw)) {
+              stop("Missing or invalid runtime.end")
+            }
+            
+            message(
+              "[KMZ DEBUG] ", server_name,
+              " runtime.end: ", end_time_raw
+            )
+            
+            end_time <- lubridate::as_datetime(end_time_raw)
+            
+            if (length(end_time) != 1 || is.na(end_time)) {
+              stop("Could not parse runtime.end")
+            }
+            
+            data.frame(
+              server = server_name,
+              end_time = end_time
+            )
+            
+          }, error = function(e) {
+            
+            message(
+              "[KMZ DEBUG] ERROR checking ",
+              server_name, ": ", conditionMessage(e)
+            )
+            
+            NULL
+          })
+        })
         
-        # pull end time from output.json
-        end_time_val <- lubridate::as_datetime(fromJSON(file = paste(serv2_link, "/output.json", sep = ""))$runtime[["end"]])
+        server_results <- Filter(Negate(is.null), server_results)
         
-        # create df
-        end_time_df <- tibble(server = "serv2_link",
-                              end_time = end_time_val)
+        if (length(server_results) == 0) {
+          stop("No BlueSky server returned valid runtime metadata")
+        }
         
-      }else{
-        # create df
-        end_time_df <- tibble(server = NA,
-                              end_time = NA)}
-      
-      # combine outputs, select most recent model and set results_link to correct url
-      recent_server <- bind_rows(date_info_1, date_info_2) %>% 
-        arrange(desc(end_time)) %>% 
-        slice(1) %>% 
-        pull(server)
-      
-      server_link <- serv_links_ls[[recent_server]]
-      
-      # smoke dispersion
-      smoke_disp_link <- paste(server_link,
-                               "/output/smoke_dispersion.kmz", sep = "")
-      
-      # download copy of google earth file into outlooks
-      curl::curl_download(smoke_disp_link, destfile = file)
-      
-      
-    }
+        server_df <- dplyr::bind_rows(server_results)
+        
+        selected_server <- server_df$server[
+          which.max(server_df$end_time)
+        ]
+        
+        message("[KMZ DEBUG] Selected server: ", selected_server)
+        
+        kmz_url <- paste0(
+          server_links[[selected_server]],
+          "/output/smoke_dispersion.kmz"
+        )
+        
+        message("[KMZ DEBUG] Download URL: ", kmz_url)
+        
+        # Download KMZ into Shiny's temporary output file
+        curl::curl_download(
+          kmz_url,
+          destfile = file
+        )
+        
+        file_size <- file.info(file)$size
+        
+        message("[KMZ DEBUG] Downloaded bytes: ", file_size)
+        
+        if (is.na(file_size) || file_size == 0) {
+          stop("Downloaded KMZ is empty or missing")
+        }
+        
+        message("[KMZ DEBUG] Download handler completed successfully")
+        
+      }, error = function(e) {
+        
+        message(
+          "[KMZ DEBUG] DOWNLOAD FAILED: ",
+          conditionMessage(e)
+        )
+        
+        stop(e)
+      })
+    },
+    
+    contentType = "application/vnd.google-earth.kmz"
   )
+  
 }
 
 # RUN APP -------------------------------------------------
