@@ -103,7 +103,50 @@ ui <- fluidPage(
     tags$meta(
       name = "theme-color",
       content = "#032B5B"
-    )
+    ),
+    
+    tags$script(HTML("
+  document.addEventListener('click', async function(event) {
+
+    const button = event.target.closest('#copy_smoke_email');
+    if (!button) return;
+
+    const editor = document.getElementById('email_body_editor');
+    if (!editor) return;
+
+    const html = editor.innerHTML;
+    const text = editor.innerText;
+
+    try {
+      const clipboardItem = new ClipboardItem({
+        'text/html': new Blob([html], {
+          type: 'text/html'
+        }),
+        'text/plain': new Blob([text], {
+          type: 'text/plain'
+        })
+      });
+
+      await navigator.clipboard.write([clipboardItem]);
+
+      Shiny.setInputValue(
+        'email_copy_status',
+        'success',
+        {priority: 'event'}
+      );
+
+    } catch (error) {
+
+      console.error('Email copy failed:', error);
+
+      Shiny.setInputValue(
+        'email_copy_status',
+        'error',
+        {priority: 'event'}
+      );
+    }
+  });
+"))
   ),
   
   # UI: App title banner ------------------------------------
@@ -256,6 +299,7 @@ server <- function(input, output, session) {
   # SERVER: Shared reactive state ---------------------------
   report_link <- reactiveVal(NULL)
   pb_only_map_link <- reactiveVal(NULL)
+  email_report_data <- reactiveVal(NULL)
   
   # SERVER: Required input validation -----------------------
   
@@ -322,6 +366,7 @@ server <- function(input, output, session) {
     ),
     {
       report_link(NULL)
+      email_report_data(NULL)
     },
     ignoreInit = TRUE
   )
@@ -630,6 +675,16 @@ server <- function(input, output, session) {
           report_url <- r2_report_url
           report_link(report_url)
           
+          # Save completed report details for optional email generation
+          email_report_data(list(
+            burn_name = params_ls$BURN_NAME,
+            author = params_ls$AUTHOR,
+            region = params_ls$REGION,
+            superfog = params_ls$SUPERFOG_SCREEN_SELECT,
+            report_url = report_url,
+            pb_map_url = pb_map_url
+          ))
+          
           
           # 2. Publish report metadata to R2 ----
           # Purpose: Make newly published reports searchable in the R2 archive.
@@ -715,6 +770,7 @@ server <- function(input, output, session) {
           
           message("R2 report publishing failed: ", conditionMessage(e))
           report_link(NULL)
+          email_report_data(NULL)
           
           FALSE
           
@@ -735,9 +791,40 @@ server <- function(input, output, session) {
     }
   )
   
-  # SERVER: GitHub Pages link displays ----------------------
+  
+  # SERVER: Report link and optional email button ----
   output$report_link_ui <- renderUI({
-    build_report_link_ui(report_link())
+    
+    report_url <- report_link()
+    
+    # Preserve the existing behavior when no report is available.
+    if (is.null(report_url)) {
+      return(build_report_link_ui(NULL))
+    }
+    
+    # Only display the email button for Jeremy Ash.
+    email_data <- email_report_data()
+    
+    show_email <- !is.null(email_data) &&
+      identical(email_data$author, "Jeremy Ash") &&
+      identical(email_data$report_url, report_url)
+    
+    tags$div(
+      style = "display: flex; align-items: center; gap: 10px; flex-wrap: wrap;",
+      
+      build_report_link_ui(report_url),
+      
+      if (show_email) {
+        actionButton(
+          inputId = "prepare_email",
+          label = NULL,
+          icon = icon("envelope"),
+          class = "btn-sm",
+          title = "Prepare email",
+          `aria-label` = "Prepare email"
+        )
+      }
+    )
   })
   
   ### link to standalone PB Piedmont map on GitHub Pages
@@ -746,7 +833,94 @@ server <- function(input, output, session) {
   })
   
   
+  # SERVER: Email preview modal ----
   
+  observeEvent(input$prepare_email, {
+    
+    email_data <- email_report_data()
+    
+    req(email_data)
+    req(identical(email_data$author, "Jeremy Ash"))
+    req(identical(email_data$report_url, report_link()))
+    
+    email <- build_smoke_email_html(email_data)
+    
+    showModal(
+      modalDialog(
+        title = "Smoke Modeling Email",
+        
+        textInput(
+          inputId = "email_subject",
+          label = "Subject",
+          value = email$subject,
+          width = "100%"
+        ),
+        
+        tags$label(
+          `for` = "email_body_editor",
+          "Email"
+        ),
+        
+        tags$div(
+          id = "email_body_editor",
+          contenteditable = "true",
+          role = "textbox",
+          `aria-multiline` = "true",
+          `aria-label` = "Email body",
+          style = paste(
+            "border: 1px solid #ccc;",
+            "border-radius: 4px;",
+            "padding: 12px;",
+            "min-height: 300px;",
+            "max-height: 55vh;",
+            "overflow-y: auto;",
+            "background: white;",
+            "color: #222;",
+            "outline-offset: 2px;"
+          ),
+          HTML(email$body_html)
+        ),
+        
+        tags$p(
+          style = "margin-top: 8px; color: #666; font-size: 12px;",
+          "You can edit the email directly before copying it to Outlook."
+        ),
+        
+        footer = tagList(
+          actionButton(
+            inputId = "copy_smoke_email",
+            label = "Copy Email",
+            icon = icon("copy"),
+            class = "btn-primary"
+          ),
+          modalButton("Close")
+        ),
+        
+        size = "l",
+        easyClose = TRUE
+      )
+    )
+  })
+  
+  
+  # SERVER: Email clipboard feedback ----
+  
+  observeEvent(input$email_copy_status, {
+    
+    if (identical(input$email_copy_status, "success")) {
+      showNotification(
+        "Email copied. Paste into Outlook using Ctrl+V.",
+        type = "message",
+        duration = 5
+      )
+    } else {
+      showNotification(
+        "Unable to copy email. Check browser clipboard permissions.",
+        type = "error",
+        duration = 8
+      )
+    }
+  })
   
   # SERVER: Google Earth KMZ workflow -----------------------
   output$kmz <- downloadHandler(
