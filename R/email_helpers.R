@@ -209,16 +209,22 @@ build_smoke_email_html <- function(email_data) {
       pb_url
     )
     
-    html <- sub(
-      escape_html(report_text),
+    # Format the two model links as an indented bullet list.
+    link_list <- paste0(
+      '<ul style="margin:0 0 0 24px;padding-left:16px;">',
+      '<li style="margin-bottom:4px;">',
       make_link(report_url, "Smoke Report with BlueSky Playground"),
-      html,
-      fixed = TRUE
+      '</li>',
+      '<li>',
+      make_link(pb_url, "PB Piedmont – Nighttime Smoke and Superfog"),
+      '</li>',
+      '</ul>'
     )
     
+    # Replace both links and their surrounding blank lines.
     html <- sub(
-      escape_html(pb_text),
-      make_link(pb_url, "PB Piedmont – Nighttime Smoke and Superfog"),
+      escape_html(paste0("\n\n", report_text, "\n", pb_text, "\n\n")),
+      paste0("<br>", link_list, "<br>"),
       html,
       fixed = TRUE
     )
@@ -232,16 +238,19 @@ build_smoke_email_html <- function(email_data) {
     
     html <- sub(
       escape_html(report_text),
-      make_link(report_url, "Smoke Report"),
+      paste0(
+        make_link(report_url, "Smoke Report"),
+        "."
+      ),
       html,
       fixed = TRUE
     )
   }
   
-  # Preserve the existing paragraph breaks.
+  # Preserve blank lines between email paragraphs.
   html <- gsub(
     "\n\n",
-    "</p><p>",
+    "<br><br>",
     html,
     fixed = TRUE
   )
@@ -257,7 +266,7 @@ build_smoke_email_html <- function(email_data) {
   html <- paste0(
     '<div style="font-family:Arial,sans-serif;',
     'font-size:11pt;color:#222222;line-height:1.5;">',
-    '<p>', html, '</p>',
+    html,
     '</div>'
   )
   
